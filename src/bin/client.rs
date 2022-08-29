@@ -1,5 +1,5 @@
 use gut_champion::client;
 
 fn main() {
-    client::run();
+    client::main();
 }
