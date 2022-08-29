@@ -25,7 +25,7 @@ const SCALE: f32 = 4.0;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32; 
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
-const LOCAL: &str = "127.0.0.1:8888";
+const IP: &str = "127.0.0.1:8888";
 const MSG_SIZE: usize = 1024;
 struct Camera {
     x: f32,
@@ -65,18 +65,26 @@ fn main_loop() -> Result<(), String> {
     let player_id = rng.gen();
     let mut entities: HashMap<u64, Entity> = HashMap::from([(player_id, Entity {
         
-        x: 0.0,
+        x: 48.0,
         y: 0.0,
+        h: 0.0,
+        w: 0.0,
         dx: 0.0,
         dy: 0.0,
+        next_step: (0.0, 0.0),
+        collide_directions: (false,false,false,false),
         current_sprite: "weatherant".to_string(),
     })]);
     let mut environment: HashMap<u64, Entity> = HashMap::from([(rng.gen(), Entity {
         
         x: 24.0,
         y: 80.0,
+        h: 0.0,
+        w: 0.0,
         dx: 0.0,
         dy: 0.0,
+        next_step: (0.0, 0.0),
+        collide_directions: (false,false,false,false),
         current_sprite: "ground".to_string(),
     })]);
     let mut w = false;
@@ -89,7 +97,7 @@ fn main_loop() -> Result<(), String> {
     // socket stuff
     
 
-    let mut client = TcpStream::connect(LOCAL).expect("Connection failed...");
+    let mut client = TcpStream::connect(IP).expect("Connection failed...");
     client
         .set_nonblocking(true);
 
@@ -191,11 +199,41 @@ fn main_loop() -> Result<(), String> {
                 _ => {}
             }
         }
-
     canvas.set_draw_color(bg_color);
     canvas.clear();
+
+
+        if w {
+            
+            entities.get_mut(&player_id).unwrap().jump();
+        }
+        if a {
+            entities.get_mut(&player_id).unwrap().dx = -60.0;
+        }
+        if d {
+            entities.get_mut(&player_id).unwrap().dx = 60.0;
+        }
+        if !a && !d {
+            entities.get_mut(&player_id).unwrap().dx = 0.0;
+
+        }
+        for e in entities.values_mut() {
+            e.tick(delta.as_millis());
+            
+        }
+
+        for e in entities.values_mut() {
+            for env in environment.values_mut() {
+                e.collide_with(env);
+            }
+        }
+        for e in entities.values_mut() {
+            e.execute_movement();
+        }
         for e in entities.values_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
+            e.w = texture.query().width as f32;
+            e.h = texture.query().height as f32;
         canvas.copy(
             texture,
             Rect::new(0, 0, texture.query().width, texture.query().height),
@@ -206,10 +244,12 @@ fn main_loop() -> Result<(), String> {
                 texture.query().height * SCALE as u32,
             ),
         )?;
-            e.tick(delta.as_millis());
         }
-        for e in environment.values() {
+        for e in environment.values_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
+
+            e.w = texture.query().width as f32;
+            e.h = texture.query().height as f32;
         canvas.copy(
             texture,
             Rect::new(0, 0, texture.query().width, texture.query().height),
