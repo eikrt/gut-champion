@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 128.0;
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Entity {
     pub x: f32,
     pub y: f32,
