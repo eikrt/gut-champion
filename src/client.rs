@@ -1,8 +1,8 @@
-use crate::entity::Entity;
+use crate::entity::{Entity, Action};
 use crate::network::*;
 use mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
 use rand::Rng;
+use lerp::Lerp;
 use sdl2::event::Event;
 use sdl2::image::{self, InitFlag, LoadTexture};
 use sdl2::keyboard::Keycode;
@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::str::from_utf8;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     io::{self, ErrorKind},
@@ -26,8 +27,9 @@ const SCALE: f32 = 4.0;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
+const SHOW_HITBOXES: bool = true;
 const IP: &str = "127.0.0.1:8888";
-const MSG_SIZE: usize = 1024;
+const MSG_SIZE: usize = 5012;
 struct Camera {
     x: f32,
     y: f32,
@@ -60,7 +62,7 @@ fn main_loop() -> Result<(), String> {
     ]);
     let mut rng = rand::thread_rng();
     let player_id = rng.gen();
-    let mut entities:  Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
+    let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
         player_id,
         Entity {
             x: 48.0,
@@ -69,9 +71,12 @@ fn main_loop() -> Result<(), String> {
             w: 0.0,
             dx: 0.0,
             dy: 0.0,
+            dir: true,
+            hp: 0,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
             current_sprite: "weatherant".to_string(),
+            hitboxes: Vec::new(),
         },
     )])));
 
@@ -85,15 +90,20 @@ fn main_loop() -> Result<(), String> {
             w: 0.0,
             dx: 0.0,
             dy: 0.0,
+            dir: true,
+            hp: 0,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
             current_sprite: "ground".to_string(),
+            hitboxes: Vec::new(),
         },
     )]);
     let mut w = false;
     let mut a = false;
     let mut s = false;
     let mut d = false;
+    let mut j = false;
+    let mut k = false;
     let mut running = true;
     let mut event_pump = sdl_context.event_pump()?;
     let mut compare_time = SystemTime::now();
@@ -118,22 +128,15 @@ fn main_loop() -> Result<(), String> {
 
                 let state: SendState = serde_json::from_str(&s).unwrap();
 
-
                 if !entities_thread.lock().unwrap().contains_key(&state.id) {
-
-                    entities_thread.lock().unwrap().insert(state.id, state.player);
-
-                }
-                else if state.id != player_id{
-
+                    entities_thread
+                        .lock()
+                        .unwrap()
+                        .insert(state.id, state.player);
+                } else if state.id != player_id {
                     *entities_thread.lock().unwrap().get_mut(&state.id).unwrap() = state.player;
-
+                } else {
                 }
-                else {
-                    
-
-                }
-
             }
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
             Err(_) => {
@@ -188,6 +191,18 @@ fn main_loop() -> Result<(), String> {
                     s = true;
                 }
                 Event::KeyDown {
+                    keycode: Some(Keycode::J),
+                    ..
+                } => {
+                    j = true;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::K),
+                    ..
+                } => {
+                    k = true;
+                }
+                Event::KeyDown {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
@@ -219,6 +234,18 @@ fn main_loop() -> Result<(), String> {
                 } => {
                     d = false;
                 }
+                Event::KeyUp {
+                    keycode: Some(Keycode::J),
+                    ..
+                } => {
+                    j = false;
+                }
+                Event::KeyUp {
+                    keycode: Some(Keycode::K),
+                    ..
+                } => {
+                    k = false;
+                }
                 _ => {}
             }
         }
@@ -230,13 +257,30 @@ fn main_loop() -> Result<(), String> {
             entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
         }
         if a {
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dx = -60.0;
+            let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
+
+            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, 0.5);
+            entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
+
         }
         if d {
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dx = 60.0;
+            let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
+            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, 0.5);
+            entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
         }
-        if !a && !d {
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dx = 0.0;
+            let next_step_y = entities.lock().unwrap().get_mut(&player_id).unwrap().next_step.1;
+        if !a && !d && next_step_y == 0.0 {
+            let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
+            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(0.0, 0.87);
+        }
+        if j {
+            entities
+                .lock()
+                .unwrap()
+                .get_mut(&player_id)
+                .unwrap()
+                .execute_action(delta.as_millis(),Action::jab());
+            j = false;
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             if id != &player_id {
@@ -245,22 +289,27 @@ fn main_loop() -> Result<(), String> {
 
             e.tick(delta.as_millis());
         }
+        let entities_clone = entities.lock().unwrap().clone();
 
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            if id != &player_id {
-                continue;
-            }
-            for env in environment.values_mut() {
-                e.collide_with(env);
-            }
+            if id == &player_id {
+                for env in environment.values_mut() {
+                    e.collide_with(delta.as_millis(), env);
+                }
+                for o_e in entities_clone.values() {
+                    e.collide_with(delta.as_millis(), o_e);
+                }
+            } 
+            
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             if id != &player_id {
                 continue;
             }
+
             e.execute_movement();
         }
-        for e in entities.lock().unwrap().values_mut() {
+        for (id, e) in entities.lock().unwrap().iter_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
             e.w = texture.query().width as f32;
             e.h = texture.query().height as f32;
@@ -274,6 +323,17 @@ fn main_loop() -> Result<(), String> {
                     texture.query().height * SCALE as u32,
                 ),
             )?;
+            if SHOW_HITBOXES {
+                for hitbox in &e.hitboxes {
+                    canvas.set_draw_color(Color::RGB(255, 130, 210));
+                    canvas.draw_rect(Rect::new(
+                        (hitbox.x * SCALE) as i32,
+                        (hitbox.y * SCALE) as i32,
+                        (hitbox.w * SCALE) as u32,
+                        (hitbox.h * SCALE) as u32,
+                    ));
+                }
+            }
         }
         for e in environment.values_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
@@ -294,45 +354,6 @@ fn main_loop() -> Result<(), String> {
         canvas.present();
         compare_time = SystemTime::now();
 
-        /* match rx_state.try_recv() {
-            Ok(msg) => {
-                if !entities.lock().unwrap().contains_key(&msg.id) {
-
-                    entities.lock().unwrap().insert(msg.id, msg.player);
-
-                }
-                else if msg.id != player_id{
-
-                    *entities.lock().unwrap().get_mut(&msg.id).unwrap() = msg.player;
-
-                }
-                else {
-                    
-                    println!("{}", msg.player.x);
-
-                }
-            }
-            Err(TryRecvError::Empty) => (),
-            Err(TryRecvError::Disconnected) => break,
-        }*/
-       /*  match rx_state.try_iter().next() {
-            Some(msg) => {
-                if !entities.lock().unwrap().contains_key(&msg.id) {
-
-                    entities.lock().unwrap().insert(msg.id, msg.player);
-
-                }
-                else if msg.id != player_id{
-
-
-                    *entities.lock().unwrap().get_mut(&msg.id).unwrap() = msg.player;
-
-                }
-                else {
-                }
-            }
-            None => {}
-        }*/
         let msg = serde_json::to_string(&SendState {
             id: player_id,
             player: entities.lock().unwrap().get(&player_id).unwrap().clone(),

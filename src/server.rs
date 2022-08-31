@@ -7,7 +7,7 @@ use std::{
 };
 
 const IP: &str = "127.0.0.1:8888";
-const MSG_SIZE: usize = 1024;
+const MSG_SIZE: usize = 5012;
 
 fn sleep() {
 
