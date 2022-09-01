@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 const GRAVITY: f32 = 5.0;
-const JUMP_STRENGTH: f32 = 128.0;
+const JUMP_STRENGTH: f32 = 188.0;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HitBox {
     pub x: f32,
@@ -28,6 +28,11 @@ pub struct Entity {
     pub collide_directions: (bool, bool, bool, bool),
     pub current_sprite: String,
     pub hitboxes: Vec<HitBox>,
+    pub move_lock: bool,
+    pub current_action: Action,
+    pub name: String,
+    pub inv_time: f32,
+    pub inv_change: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -39,9 +44,11 @@ pub struct Action {
     pub knock_x: f32,
     pub knock_y: f32,
     pub damage: f32,
+    pub hit_time: f32,
+    pub duration: f32,
 }
 impl Action {
-    pub fn jab() -> Action {
+    pub fn jab(class: Class) -> Action {
         Action {
             w: 12.0,
             h: 12.0,
@@ -50,23 +57,109 @@ impl Action {
             knock_x: 2.0,
             knock_y: 2.0,
             damage: 2.0,
+            hit_time: 10.0,
+            duration: 100.0,
+        }
+    }
+    pub fn slide(class: Class) -> Action {
+        Action {
+            w: 12.0,
+            h: 12.0,
+            x: -8.0,
+            y: 4.0,
+            knock_x: 10.0,
+            knock_y: 10.0,
+            damage: 15.0,
+            hit_time: 10.0,
+            duration: 750.0,
+        }
+    }
+    pub fn nair(class: Class) -> Action {
+        Action {
+            w: 12.0,
+            h: 12.0,
+            x: -8.0,
+            y: 4.0,
+            knock_x: 20.0,
+            knock_y: 20.0,
+            damage: 20.0,
+            hit_time: 10.0,
+            duration: 750.0,
+        }
+    }
+    pub fn up(class: Class) -> Action {
+        Action {
+            w: 12.0,
+            h: 12.0,
+            x: -8.0,
+            y: -8.0,
+            knock_x: 25.0,
+            knock_y: 25.0,
+            damage: 25.0,
+            hit_time: 10.0,
+            duration: 750.0,
+        }
+    }
+    pub fn down(class: Class) -> Action {
+        Action {
+            w: 12.0,
+            h: 12.0,
+            x: -8.0,
+            y: 14.0,
+            knock_x: 25.0,
+            knock_y: 25.0,
+            damage: 25.0,
+            hit_time: 10.0,
+            duration: 750.0,
+        }
+    }
+    pub fn smash (class: Class) -> Action {
+        Action {
+            w: 12.0,
+            h: 4.0,
+            x: -8.0,
+            y: 8.0,
+            knock_x: 50.0,
+            knock_y: 50.0,
+            damage: 40.0,
+            hit_time: 10.0,
+            duration: 750.0,
         }
     }
 }
 pub struct Class {}
+impl Class {
+    pub fn ant() -> Class {
+        Class {}
+    }
+}
 impl Entity {
     pub fn tick(&mut self, delta: u128) {
+        self.inv_change += delta as f32;
+        for hitbox in &mut self.hitboxes {
+            let mut h_x = self.x;
+            let mut h_y = self.y + self.current_action.y;
+            if self.dir {
+                h_x += self.current_action.x + self.w
+            } else {
+                h_x -= self.current_action.w + self.current_action.x;
+            }
+            hitbox.x = h_x;
+            hitbox.y = h_y;
+        }
         self.dy += GRAVITY;
         self.calculate_step(delta);
         for hitbox in &mut self.hitboxes {
             hitbox.change += delta as f32;
             if hitbox.change > hitbox.duration {
                 hitbox.active = false;
+                self.move_lock = false;
             }
         }
         self.hitboxes.retain(|h| h.active);
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
+        self.current_action = action.clone();
         let mut h_x = self.x;
         let mut h_y = self.y + action.y;
         if self.dir {
@@ -80,24 +173,34 @@ impl Entity {
             w: action.w,
             h: action.h,
             dir: self.dir,
-            duration: 100.0,
+            duration: action.duration,
             change: 0.0,
             active: true,
             action: action,
-        })
+        });
+        self.move_lock = true;
     }
     pub fn take_hit(&mut self, delta: u128, hitbox: &HitBox) {
+        if !hitbox.active {
+            return;
+        }
+        if self.inv_change < self.inv_time {
+            return;
+        }
         let hit_multiplier = 1.0 + self.hp as f32 / 100.0;
+        let hit_multiplier_knock = 3.0 + self.hp as f32 / 50.0;
         if hitbox.dir {
-            self.dx += hitbox.action.knock_x * hit_multiplier;
-            self.dy -= hitbox.action.knock_y * hit_multiplier;
+            self.dx += 5.0 + hitbox.action.knock_x * hit_multiplier_knock;
+            self.dy -= 5.0 + hitbox.action.knock_y * hit_multiplier_knock;
             self.hp += (hitbox.action.damage * hit_multiplier) as i32;
         }
         if !hitbox.dir {
-            self.dx -= hitbox.action.knock_x * hit_multiplier;
-            self.dy -= hitbox.action.knock_y * hit_multiplier;
+            self.dx -= 5.0 + hitbox.action.knock_x * hit_multiplier_knock;
+            self.dy -= 5.0 + hitbox.action.knock_y * hit_multiplier_knock;
             self.hp += (hitbox.action.damage * hit_multiplier) as i32;
         }
+
+        self.inv_change = 0.0;
         self.calculate_step(delta);
     }
     pub fn execute_movement(&mut self) {
@@ -141,13 +244,15 @@ impl Entity {
             self.collide_directions.1 = true;
             self.dx = 0.0;
         }
+    }
+    pub fn collide_with_hitboxes(&mut self, delta: u128, other: &Entity) {
         for hitbox in &other.hitboxes {
             if self.x + self.w / 2.0 + self.next_step.0 > hitbox.x
                 && self.x + self.w / 2.0 + self.next_step.0 < hitbox.x + hitbox.w
                 && self.y + self.h / 2.0 + self.next_step.1 > hitbox.y
                 && self.y + self.h / 2.0 + self.next_step.1 < hitbox.y + hitbox.h
             {
-                self.take_hit(delta, hitbox);
+                self.take_hit(delta, &hitbox);
             }
         }
     }

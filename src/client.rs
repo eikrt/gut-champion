@@ -1,15 +1,19 @@
-use crate::entity::{Entity, Action};
+use crate::entity::{Action, Class, Entity};
 use crate::network::*;
+use lerp::Lerp;
 use mpsc::TryRecvError;
 use rand::Rng;
-use lerp::Lerp;
 use sdl2::event::Event;
 use sdl2::image::{self, InitFlag, LoadTexture};
 use sdl2::keyboard::Keycode;
 use sdl2::mouse::MouseButton;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
-use sdl2::render::WindowCanvas;
+use sdl2::render::Texture;
+use sdl2::render::{TextureCreator, WindowCanvas};
+use sdl2::surface::Surface;
+
+use sdl2::ttf::Font;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -21,6 +25,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     io::{self, ErrorKind},
     sync::mpsc,
+    env,
+    process::exit,
 };
 use std::{thread, time};
 const SCALE: f32 = 4.0;
@@ -28,13 +34,66 @@ const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
-const IP: &str = "127.0.0.1:8888";
 const MSG_SIZE: usize = 5012;
+const STATUS_FONT_SIZE: u16 = 200;
 struct Camera {
     x: f32,
     y: f32,
 }
+
+pub struct Text<'a> {
+    pub text_surface: Surface<'a>,
+    pub text_texture: Texture<'a>,
+    pub text_sprite: Rect,
+}
+pub fn get_text<'a, T>(
+    msg: String,
+    color: Color,
+    font_size: u16,
+    font: &Font,
+    texture_creator: &'a TextureCreator<T>,
+) -> Option<Text<'a>> {
+    let text_surface = font
+        .render(&msg)
+        .blended(color)
+        .map_err(|e| e.to_string())
+        .ok()?;
+    let text_texture = texture_creator
+        .create_texture_from_surface(&text_surface)
+        .map_err(|e| e.to_string())
+        .ok()?;
+    let text_sprite = Rect::new(
+        0,
+        0,
+        (font_size as f32 / 2.0) as u32 * msg.len() as u32,
+        (font_size as f32) as u32,
+    );
+
+    let text = Text {
+        text_surface: text_surface,
+        text_texture: text_texture,
+        text_sprite: text_sprite,
+    };
+    return Some(text);
+}
+pub fn render_text(
+    canvas: &mut WindowCanvas,
+    texture: &Texture,
+    position: (i32, i32),
+    sprite: Rect,
+    ratio_x: f32,
+    ratio_y: f32,
+) {
+    let screen_rect = Rect::new(
+        (position.0 as f32 / ratio_x) as i32,
+        (position.1 as f32 / ratio_y) as i32,
+        (sprite.width() as f32 / ratio_x) as u32,
+        (sprite.height() as f32 / ratio_y) as u32,
+    );
+    canvas.copy(texture, None, screen_rect);
+}
 fn main_loop() -> Result<(), String> {
+    let mut ip: &str = "127.0.0.1:8888";
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
@@ -48,11 +107,17 @@ fn main_loop() -> Result<(), String> {
         .expect("could not make a canvas");
 
     let _image_context = image::init(InitFlag::PNG | InitFlag::JPG)?;
+
+    let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
+
+    let mut status_font = ttf_context.load_font("fonts/PixelOperator.ttf", STATUS_FONT_SIZE)?;
+
     let texture_creator = canvas.texture_creator();
     let bg_color = Color::RGB(255, 255, 255);
     let tile_color = Color::RGB(128, 64, 55);
     let floor_color = Color::RGB(64, 32, 30);
     let player_color = Color::RGB(128, 128, 0);
+    let mut hit_change = 0.0;
     let sprites = HashMap::from([
         (
             "weatherant",
@@ -61,7 +126,14 @@ fn main_loop() -> Result<(), String> {
         ("ground", texture_creator.load_texture("res/ground.png")?),
     ]);
     let mut rng = rand::thread_rng();
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        println!("Provide arguments (username, ip)"); 
+        exit(0);
+    }
     let player_id = rng.gen();
+    let player_name = &args[1];
+    ip = &args[2]; 
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
         player_id,
         Entity {
@@ -77,6 +149,11 @@ fn main_loop() -> Result<(), String> {
             collide_directions: (false, false, false, false),
             current_sprite: "weatherant".to_string(),
             hitboxes: Vec::new(),
+            move_lock: false,
+            current_action: Action::jab(Class::ant()),
+            name: player_name.to_string(),
+            inv_change: 0.0,
+            inv_time: 1000.0,
         },
     )])));
 
@@ -96,6 +173,11 @@ fn main_loop() -> Result<(), String> {
             collide_directions: (false, false, false, false),
             current_sprite: "ground".to_string(),
             hitboxes: Vec::new(),
+            move_lock: false,
+            current_action: Action::jab(Class::ant()),
+            name: "obstacle".to_string(),
+            inv_change: 0.0,
+            inv_time: 1000.0,
         },
     )]);
     let mut w = false;
@@ -109,7 +191,7 @@ fn main_loop() -> Result<(), String> {
     let mut compare_time = SystemTime::now();
     // socket stuff
 
-    let mut client = TcpStream::connect(IP).expect("Connection failed...");
+    let mut client = TcpStream::connect(ip).expect("Connection failed...");
     client.set_nonblocking(true);
 
     let (tx, rx) = mpsc::channel::<String>();
@@ -161,7 +243,7 @@ fn main_loop() -> Result<(), String> {
         if delta.as_millis() / 10 != 0 {
             //   println!("FPS: {}", 100 / (delta.as_millis()/10));
         }
-
+        hit_change += delta.as_millis() as f32;
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -256,30 +338,117 @@ fn main_loop() -> Result<(), String> {
         if w {
             entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
         }
-        if a {
-            let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
+        if !entities
+            .lock()
+            .unwrap()
+            .get_mut(&player_id)
+            .unwrap()
+            .move_lock
+        {
+            if a {
+                let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
 
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, 0.5);
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
-
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, 0.5);
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
+            }
+            if d {
+                let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, 0.5);
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
+            }
         }
-        if d {
-            let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, 0.5);
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
-        }
-            let next_step_y = entities.lock().unwrap().get_mut(&player_id).unwrap().next_step.1;
+        let next_step_y = entities
+            .lock()
+            .unwrap()
+            .get_mut(&player_id)
+            .unwrap()
+            .next_step
+            .1;
         if !a && !d && next_step_y == 0.0 {
             let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
             entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(0.0, 0.87);
         }
         if j {
-            entities
+            if !a
+                && !d
+                && !w
+                && !s
+                && entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .next_step
+                    .1
+                    == 0.0
+                && hit_change > Action::jab(Class::ant()).hit_time
+            {
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::jab(Class::ant()));
+                hit_change = 0.0;
+            }
+            if !a
+                && !d
+                && !w
+                && !s
+                && entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .next_step
+                    .1
+                    != 0.0
+                && hit_change > Action::nair(Class::ant()).hit_time
+            {
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::nair(Class::ant()));
+                hit_change = 0.0;
+            }
+            if (a || d) && hit_change > Action::slide(Class::ant()).hit_time {
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::slide(Class::ant()));
+                hit_change = 0.0;
+            }
+            if w && hit_change > Action::up(Class::ant()).hit_time {
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::up(Class::ant()));
+                hit_change = 0.0;
+            }
+            if s && entities
                 .lock()
                 .unwrap()
                 .get_mut(&player_id)
                 .unwrap()
-                .execute_action(delta.as_millis(),Action::jab());
+                .next_step
+                .1
+                > 0.0
+                && hit_change > Action::down(Class::ant()).hit_time
+            {
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::down(Class::ant()));
+                hit_change = 0.0;
+            }
             j = false;
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
@@ -289,18 +458,20 @@ fn main_loop() -> Result<(), String> {
 
             e.tick(delta.as_millis());
         }
-        let entities_clone = entities.lock().unwrap().clone();
+        let mut entities_clone = entities.lock().unwrap().clone();
 
         for (id, e) in entities.lock().unwrap().iter_mut() {
             if id == &player_id {
                 for env in environment.values_mut() {
                     e.collide_with(delta.as_millis(), env);
                 }
-                for o_e in entities_clone.values() {
-                    e.collide_with(delta.as_millis(), o_e);
+                for (o_id, o_e) in entities_clone.iter() {
+                    if o_id == &player_id {
+                        continue;
+                    }
+                    e.collide_with_hitboxes(delta.as_millis(), o_e);
                 }
-            } 
-            
+            }
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             if id != &player_id {
@@ -350,6 +521,40 @@ fn main_loop() -> Result<(), String> {
                     texture.query().height * SCALE as u32,
                 ),
             )?;
+        }
+        for (i, e) in entities.lock().unwrap().iter().enumerate() {
+            let name_text = get_text(
+                e.1.name.clone(),
+                Color::RGBA(0, 0, 0, 255),
+                STATUS_FONT_SIZE,
+                &status_font,
+                &texture_creator,
+            ).unwrap();
+            let position = ((40.0 + i as f32 * 308.0 * SCALE) as i32,(SCALE * SCREEN_HEIGHT as f32 - 108.0 * SCALE) as i32);
+            render_text(
+                &mut canvas,
+                &name_text.text_texture,
+                position,
+                name_text.text_sprite,
+                SCALE,
+                SCALE,
+            );
+            let hp_text = get_text(
+                format!("{}%", e.1.hp),
+                Color::RGBA(0, 0, 0, 255),
+                STATUS_FONT_SIZE,
+                &status_font,
+                &texture_creator,
+            ).unwrap();
+            let position = ((40.0 + i as f32 * 308.0 * SCALE) as i32,(SCALE * SCREEN_HEIGHT as f32 - 60.0 * SCALE) as i32);
+            render_text(
+                &mut canvas,
+                &hp_text.text_texture,
+                position,
+                hp_text.text_sprite,
+                SCALE,
+                SCALE,
+            );
         }
         canvas.present();
         compare_time = SystemTime::now();
