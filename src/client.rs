@@ -23,10 +23,10 @@ use std::str::from_utf8;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
-    io::{self, ErrorKind},
-    sync::mpsc,
     env,
+    io::{self, ErrorKind},
     process::exit,
+    sync::mpsc,
 };
 use std::{thread, time};
 const SCALE: f32 = 4.0;
@@ -34,7 +34,7 @@ const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
-const MSG_SIZE: usize = 5012;
+const MSG_SIZE: usize = 1024;
 const STATUS_FONT_SIZE: u16 = 200;
 struct Camera {
     x: f32,
@@ -128,12 +128,12 @@ fn main_loop() -> Result<(), String> {
     let mut rng = rand::thread_rng();
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        println!("Provide arguments (username, ip)"); 
+        println!("Provide arguments (username, ip)");
         exit(0);
     }
     let player_id = rng.gen();
     let player_name = &args[1];
-    ip = &args[2]; 
+    ip = &args[2];
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
         player_id,
         Entity {
@@ -193,7 +193,6 @@ fn main_loop() -> Result<(), String> {
 
     let mut client = TcpStream::connect(ip).expect("Connection failed...");
     client.set_nonblocking(true);
-
     let (tx, rx) = mpsc::channel::<String>();
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
 
@@ -202,21 +201,31 @@ fn main_loop() -> Result<(), String> {
         match client.read_exact(&mut buff) {
             Ok(_) => {
                 let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
-
                 let s = match std::str::from_utf8(&msg) {
                     Ok(v) => v,
                     Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
                 };
+                println!("{}", s);
+                let state: Option<SendState> = match serde_json::from_str(&s) {
+                    Ok(s) => Some(s),
+                    Err(_) => None,
+                };
 
-                let state: SendState = serde_json::from_str(&s).unwrap();
-
-                if !entities_thread.lock().unwrap().contains_key(&state.id) {
+                if state.is_none() {
+                    continue;
+                }
+                let state_ref = state.as_ref().unwrap();
+                if !entities_thread.lock().unwrap().contains_key(&state_ref.id) {
                     entities_thread
                         .lock()
                         .unwrap()
-                        .insert(state.id, state.player);
-                } else if state.id != player_id {
-                    *entities_thread.lock().unwrap().get_mut(&state.id).unwrap() = state.player;
+                        .insert(state_ref.id, state_ref.player.clone());
+                } else if state_ref.id != player_id {
+                    *entities_thread
+                        .lock()
+                        .unwrap()
+                        .get_mut(&state_ref.id)
+                        .unwrap() = state_ref.player.clone();
                 } else {
                 }
             }
@@ -529,8 +538,12 @@ fn main_loop() -> Result<(), String> {
                 STATUS_FONT_SIZE,
                 &status_font,
                 &texture_creator,
-            ).unwrap();
-            let position = ((40.0 + i as f32 * 308.0 * SCALE) as i32,(SCALE * SCREEN_HEIGHT as f32 - 108.0 * SCALE) as i32);
+            )
+            .unwrap();
+            let position = (
+                (40.0 + i as f32 * 308.0 * SCALE) as i32,
+                (SCALE * SCREEN_HEIGHT as f32 - 108.0 * SCALE) as i32,
+            );
             render_text(
                 &mut canvas,
                 &name_text.text_texture,
@@ -545,8 +558,12 @@ fn main_loop() -> Result<(), String> {
                 STATUS_FONT_SIZE,
                 &status_font,
                 &texture_creator,
-            ).unwrap();
-            let position = ((40.0 + i as f32 * 308.0 * SCALE) as i32,(SCALE * SCREEN_HEIGHT as f32 - 60.0 * SCALE) as i32);
+            )
+            .unwrap();
+            let position = (
+                (40.0 + i as f32 * 308.0 * SCALE) as i32,
+                (SCALE * SCREEN_HEIGHT as f32 - 60.0 * SCALE) as i32,
+            );
             render_text(
                 &mut canvas,
                 &hp_text.text_texture,

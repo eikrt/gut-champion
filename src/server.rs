@@ -6,12 +6,11 @@ use std::{
     time::Duration,
 };
 
-const IP: &str = "127.0.0.1:8888";
-const MSG_SIZE: usize = 5012;
+const IP: &str = "0.0.0.0:8888";
+const MSG_SIZE: usize = 1024;
 
 fn sleep() {
 
-        //thread::sleep(Duration::from_millis(10));
 }
 
 pub fn main() {
