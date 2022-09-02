@@ -57,7 +57,7 @@ impl Action {
             knock_x: 2.0,
             knock_y: 2.0,
             damage: 2.0,
-            hit_time: 10.0,
+            hit_time: 1000.0,
             duration: 100.0,
         }
     }
@@ -70,7 +70,7 @@ impl Action {
             knock_x: 10.0,
             knock_y: 10.0,
             damage: 15.0,
-            hit_time: 10.0,
+            hit_time: 1000.0,
             duration: 750.0,
         }
     }
@@ -83,7 +83,7 @@ impl Action {
             knock_x: 20.0,
             knock_y: 20.0,
             damage: 20.0,
-            hit_time: 10.0,
+            hit_time: 1000.0,
             duration: 750.0,
         }
     }
@@ -96,7 +96,7 @@ impl Action {
             knock_x: 25.0,
             knock_y: 25.0,
             damage: 25.0,
-            hit_time: 10.0,
+            hit_time: 1000.0,
             duration: 750.0,
         }
     }
@@ -109,7 +109,7 @@ impl Action {
             knock_x: 25.0,
             knock_y: 25.0,
             damage: 25.0,
-            hit_time: 10.0,
+            hit_time: 1000.0,
             duration: 750.0,
         }
     }
@@ -122,7 +122,7 @@ impl Action {
             knock_x: 50.0,
             knock_y: 50.0,
             damage: 40.0,
-            hit_time: 10.0,
+            hit_time: 1000.0,
             duration: 750.0,
         }
     }

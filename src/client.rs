@@ -1,4 +1,5 @@
 use crate::entity::{Action, Class, Entity};
+use crate::environment::*;
 use crate::network::*;
 use lerp::Lerp;
 use mpsc::TryRecvError;
@@ -158,9 +159,6 @@ fn main_loop() -> Result<(), String> {
     )])));
 
     let mut entities_thread = entities.clone();
-    let mut entities_buffer: Arc<Mutex<HashMap<u64, Entity>>> =
-        Arc::new(Mutex::new(HashMap::from([])));
-    let mut entities_buffer_thread = entities_buffer.clone();
     let mut environment: HashMap<u64, Entity> = HashMap::from([(
         rng.gen(),
         Entity {
@@ -208,7 +206,6 @@ fn main_loop() -> Result<(), String> {
                     Ok(v) => v,
                     Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
                 };
-                println!("{}", s);
                 let state: Option<SendState> = match serde_json::from_str(&s) {
                     Ok(s) => Some(s),
                     Err(_) => None,
@@ -224,13 +221,8 @@ fn main_loop() -> Result<(), String> {
                         .lock()
                         .unwrap()
                         .insert(state_ref.id, state_ref.player.clone());
-                    entities_buffer_thread
-                        .lock()
-                        .unwrap()
-                        .insert(state_ref.id, state_ref.player.clone());
                 } else if state_ref.id != player_id {
                     
-                    *entities_buffer_thread.lock().unwrap() = entities_thread.lock().unwrap().clone();
                     *entities_thread
                         .lock()
                         .unwrap()
@@ -471,16 +463,15 @@ fn main_loop() -> Result<(), String> {
             j = false;
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            if id != &player_id {
+          /*  if id != &player_id {
                 continue;
             }
-
+*/
             e.tick(delta.as_millis());
         }
         let mut entities_clone = entities.lock().unwrap().clone();
 
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            if id == &player_id {
                 for env in environment.values_mut() {
                     e.collide_with(delta.as_millis(), env);
                 }
@@ -490,44 +481,17 @@ fn main_loop() -> Result<(), String> {
                     }
                     e.collide_with_hitboxes(delta.as_millis(), o_e);
                 }
-            }
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            if id != &player_id {
-                continue;
-            }
 
             e.execute_movement();
-        }
-        entities_client = entities.lock().unwrap().clone();
-        for (id, e) in entities_client.iter_mut() {
-            if id == &player_id {
-                continue;
-            }
-            if !entities_buffer.lock().unwrap().contains_key(id) {
-                continue;
-            }
-            e.x = entities_buffer
-                .lock()
-                .unwrap()
-                .get(id)
-                .unwrap()
-                .x
-                .lerp(entities.lock().unwrap().get(id).unwrap().x, 0.2);
-            e.y = entities_buffer
-                .lock()
-                .unwrap()
-                .get(id)
-                .unwrap()
-                .y
-                .lerp(entities.lock().unwrap().get(id).unwrap().y, 0.2);
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
             e.w = texture.query().width as f32;
             e.h = texture.query().height as f32;
         }
-        for (id, e) in entities_client.iter() {
+        for (id, e) in entities.lock().unwrap().iter_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
             canvas.copy(
                 texture,
