@@ -471,13 +471,13 @@ fn main_loop() -> Result<(), String> {
 */
             e.tick(delta.as_millis());
         }
-        let mut entities_clone = entities.lock().unwrap().clone();
+        let mut entities_network_clone = network_entities.lock().unwrap().clone();
 
         for (id, e) in entities.lock().unwrap().iter_mut() {
                 for env in environment.values_mut() {
                     e.collide_with(delta.as_millis(), env);
                 }
-                for (o_id, o_e) in entities_clone.iter() {
+                for (o_id, o_e) in entities_network_clone.iter() {
                     if o_id == &player_id {
                         continue;
                     }

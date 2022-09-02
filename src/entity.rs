@@ -8,6 +8,9 @@ pub struct NetworkBare{
     pub y: f32,
     pub w: f32,
     pub h: f32,
+    pub active: bool,
+    pub dir: bool,
+    pub action: Action,
 }
 pub trait AsNetworkBare {
     fn get_as_network_bare(&self) -> NetworkBare;
@@ -36,6 +39,9 @@ impl AsNetworkBare for HitBox {
             y: self.y,
             w: self.w,
             h: self.h,
+            dir: self.dir,
+            action: self.action.clone(),
+            active: self.active
         }
     }
 }
@@ -233,7 +239,7 @@ impl Entity {
         });
         self.move_lock = true;
     }
-    pub fn take_hit(&mut self, delta: u128, hitbox: &HitBox) {
+    pub fn take_hit(&mut self, delta: u128, hitbox: &NetworkBare) {
         if !hitbox.active {
             return;
         }
@@ -298,7 +304,7 @@ impl Entity {
             self.dx = 0.0;
         }
     }
-    pub fn collide_with_hitboxes(&mut self, delta: u128, other: &Entity) {
+    pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
         for hitbox in &other.hitboxes {
             if self.x + self.w / 2.0 + self.next_step.0 > hitbox.x
                 && self.x + self.w / 2.0 + self.next_step.0 < hitbox.x + hitbox.w
