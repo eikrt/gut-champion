@@ -1,4 +1,4 @@
-use crate::entity::{Action, Class, Entity};
+use crate::entity::{Action, Class, Entity, NetworkEntity, NetworkBare, AsNetworkEntity, AsNetworkBare};
 use crate::environment::*;
 use crate::network::*;
 use lerp::Lerp;
@@ -35,7 +35,7 @@ const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
-const MSG_SIZE: usize = 1024;
+const MSG_SIZE: usize = 512;
 const STATUS_FONT_SIZE: u16 = 200;
 struct Camera {
     x: f32,
@@ -157,6 +157,8 @@ fn main_loop() -> Result<(), String> {
             inv_time: 1000.0,
         },
     )])));
+    let mut network_entities: Arc<Mutex<HashMap<u64, NetworkEntity>>> = Arc::new(Mutex::new(HashMap::new()));
+    let mut network_entities_thread = network_entities.clone();
 
     let mut entities_thread = entities.clone();
     let mut environment: HashMap<u64, Entity> = HashMap::from([(
@@ -199,7 +201,7 @@ fn main_loop() -> Result<(), String> {
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
     thread::spawn(move || loop {
         let mut buff = vec![0; MSG_SIZE];
-        match client.read_exact(&mut buff) {
+        match client.read(&mut buff) {
             Ok(_) => {
                 let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
                 let s = match std::str::from_utf8(&msg) {
@@ -217,13 +219,13 @@ fn main_loop() -> Result<(), String> {
                 let state_ref = state.as_ref().unwrap();
 
                 if !entities_thread.lock().unwrap().contains_key(&state_ref.id) {
-                    entities_thread
+                    network_entities_thread
                         .lock()
                         .unwrap()
                         .insert(state_ref.id, state_ref.player.clone());
                 } else if state_ref.id != player_id {
                     
-                    *entities_thread
+                    *network_entities_thread
                         .lock()
                         .unwrap()
                         .get_mut(&state_ref.id)
@@ -515,6 +517,30 @@ fn main_loop() -> Result<(), String> {
                 }
             }
         }
+        for (id, e) in network_entities.lock().unwrap().iter_mut() {
+            let texture = &sprites[e.current_sprite.as_str()];
+            canvas.copy(
+                texture,
+                Rect::new(0, 0, texture.query().width, texture.query().height),
+                Rect::new(
+                    (e.x * SCALE as f32) as i32,
+                    (e.y * SCALE as f32) as i32,
+                    texture.query().width * SCALE as u32,
+                    texture.query().height * SCALE as u32,
+                ),
+            )?;
+            if SHOW_HITBOXES {
+                for hitbox in &e.hitboxes {
+                    canvas.set_draw_color(Color::RGB(255, 130, 210));
+                    canvas.draw_rect(Rect::new(
+                        (hitbox.x * SCALE) as i32,
+                        (hitbox.y * SCALE) as i32,
+                        (hitbox.w * SCALE) as u32,
+                        (hitbox.h * SCALE) as u32,
+                    ));
+                }
+            }
+        }
         for e in environment.values_mut() {
             let texture = &sprites[e.current_sprite.as_str()];
 
@@ -530,6 +556,48 @@ fn main_loop() -> Result<(), String> {
                     texture.query().height * SCALE as u32,
                 ),
             )?;
+        }
+        for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
+            let name_text = get_text(
+                e.1.name.clone(),
+                Color::RGBA(0, 0, 0, 255),
+                STATUS_FONT_SIZE,
+                &status_font,
+                &texture_creator,
+            )
+            .unwrap();
+            let position = (
+                (180.0 * SCALE + i as f32 * 308.0 * SCALE) as i32,
+                (SCALE * SCREEN_HEIGHT as f32 - 108.0 * SCALE) as i32,
+            );
+            render_text(
+                &mut canvas,
+                &name_text.text_texture,
+                position,
+                name_text.text_sprite,
+                SCALE,
+                SCALE,
+            );
+            let hp_text = get_text(
+                format!("{}%", e.1.hp),
+                Color::RGBA(0, 0, 0, 255),
+                STATUS_FONT_SIZE,
+                &status_font,
+                &texture_creator,
+            )
+            .unwrap();
+            let position = (
+                (180.0 * SCALE + i as f32 * 308.0 * SCALE) as i32,
+                (SCALE * SCREEN_HEIGHT as f32 - 60.0 * SCALE) as i32,
+            );
+            render_text(
+                &mut canvas,
+                &hp_text.text_texture,
+                position,
+                hp_text.text_sprite,
+                SCALE,
+                SCALE,
+            );
         }
         for (i, e) in entities.lock().unwrap().iter().enumerate() {
             let name_text = get_text(
@@ -578,7 +646,7 @@ fn main_loop() -> Result<(), String> {
 
         let msg = serde_json::to_string(&SendState {
             id: player_id,
-            player: entities.lock().unwrap().get(&player_id).unwrap().clone(),
+            player: entities.lock().unwrap().get(&player_id).unwrap().clone().get_as_network_entity(),
         })
         .unwrap();
         if tx.send(msg).is_err() {

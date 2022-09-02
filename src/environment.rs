@@ -5,8 +5,6 @@ pub struct Obstacle {
     pub y: f32,
     pub w: f32,
     pub h: f32,
-    pub hp: i32,
-    pub dir: bool,
     pub current_sprite: String,
 }
 

@@ -3,6 +3,20 @@ use serde::{Deserialize, Serialize};
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkBare{
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+pub trait AsNetworkBare {
+    fn get_as_network_bare(&self) -> NetworkBare;
+}
+pub trait AsNetworkEntity {
+    fn get_as_network_entity(&self) -> NetworkEntity;
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HitBox {
     pub x: f32,
     pub y: f32,
@@ -13,6 +27,17 @@ pub struct HitBox {
     pub active: bool,
     pub action: Action,
     pub dir: bool,
+}
+
+impl AsNetworkBare for HitBox {
+    fn get_as_network_bare(&self) -> NetworkBare{
+        NetworkBare {
+            x: self.x,
+            y: self.y,
+            w: self.w,
+            h: self.h,
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Entity {
@@ -33,6 +58,34 @@ pub struct Entity {
     pub name: String,
     pub inv_time: f32,
     pub inv_change: f32,
+}
+impl AsNetworkEntity for Entity {
+    fn get_as_network_entity(&self) -> NetworkEntity{
+        NetworkEntity {
+            x: self.x,
+            y: self.y,
+            dx: self.dx,
+            dy: self.dy,
+            hp: self.hp,
+            dir: self.dir,
+            hitboxes: self.hitboxes.clone().into_iter().map(|h| h.get_as_network_bare()).collect(),
+            name: self.name.clone(),
+            current_sprite: self.current_sprite.clone(),
+
+        }
+    }
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkEntity {
+    pub x: f32,
+    pub y: f32,
+    pub dx: f32,
+    pub dy: f32,
+    pub hp: i32,
+    pub dir: bool,
+    pub hitboxes: Vec<NetworkBare>,
+    pub name: String,
+    pub current_sprite: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
