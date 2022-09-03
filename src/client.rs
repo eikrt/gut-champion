@@ -1,8 +1,10 @@
 use crate::entity::*;
 use crate::environment::*;
-use crate::network::*;
-use crate::graphics::*;
 use crate::graphics::Sprite;
+use crate::graphics::*;
+use crate::network::*;
+use crate::network::*;
+use bincode;
 use lerp::Lerp;
 use mpsc::TryRecvError;
 use rand::Rng;
@@ -15,7 +17,6 @@ use sdl2::rect::Rect;
 use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
-use bincode;
 use sdl2::ttf::Font;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -31,7 +32,6 @@ use std::{
     process::exit,
     sync::mpsc,
 };
-use crate::network::*;
 use std::{thread, time};
 const SCALE: f32 = 4.0;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
@@ -68,12 +68,19 @@ fn main_loop() -> Result<(), String> {
     let mut hit_change = 0.0;
     let sprites = HashMap::from([
         (
-            Sprite::Weatherant, 
+            Sprite::Weatherant,
             texture_creator.load_texture("res/player.png")?,
         ),
-        (Sprite::Ground, texture_creator.load_texture("res/ground.png")?),
+        (
+            Sprite::Ground,
+            texture_creator.load_texture("res/ground.png")?,
+        ),
     ]);
     let mut rng = rand::thread_rng();
+    let mut tilt_change = 0;
+    let mut tilt_time = 132;
+    let mut tilting = false;
+    let mut smashing = false;
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
         println!("Provide arguments (username, ip)");
@@ -98,15 +105,15 @@ fn main_loop() -> Result<(), String> {
             current_sprite: Sprite::Weatherant,
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::action(ClassType::ant, ActionType::jab),
+            current_action: Action::action(ClassType::Ant, ActionType::Jab, 1),
             name: player_name.to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
         },
     )])));
     let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
-    let mut time_from_last_packet_main: Arc<Mutex<u128>> =  time_from_last_packet.clone();
-    let mut time_from_last_packet_compare = SystemTime::now(); 
+    let mut time_from_last_packet_main: Arc<Mutex<u128>> = time_from_last_packet.clone();
+    let mut time_from_last_packet_compare = SystemTime::now();
     let mut network_entities: Arc<Mutex<HashMap<u64, NetworkEntity>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let mut network_entities_thread = network_entities.clone();
@@ -129,7 +136,7 @@ fn main_loop() -> Result<(), String> {
             current_sprite: Sprite::Ground,
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::action(ClassType::ant, ActionType::jab),
+            current_action: Action::action(ClassType::Ant, ActionType::Jab, 1),
             name: "obstacle".to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -140,8 +147,16 @@ fn main_loop() -> Result<(), String> {
     let mut a = false;
     let mut s = false;
     let mut d = false;
+    let mut w_released = false;
+    let mut a_released = false;
+    let mut s_released = false;
+    let mut d_released = false;
+    let mut j_released = false;
     let mut j = false;
     let mut k = false;
+    let mut do_not_move = false;
+    let mut smash_change = 0;
+
     let mut running = true;
     let mut event_pump = sdl_context.event_pump()?;
     let mut compare_time = SystemTime::now();
@@ -152,8 +167,10 @@ fn main_loop() -> Result<(), String> {
     let (tx, rx) = mpsc::channel::<SendState>();
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
     thread::spawn(move || loop {
-
-        *time_from_last_packet.lock().unwrap() = SystemTime::now().duration_since(time_from_last_packet_compare).unwrap().as_millis();
+        *time_from_last_packet.lock().unwrap() = SystemTime::now()
+            .duration_since(time_from_last_packet_compare)
+            .unwrap()
+            .as_millis();
 
         let mut buff = vec![0; MSG_SIZE];
         match client.read_exact(&mut buff) {
@@ -174,7 +191,6 @@ fn main_loop() -> Result<(), String> {
                     continue;
                 }
 
-
                 if !network_entities_thread
                     .lock()
                     .unwrap()
@@ -194,7 +210,7 @@ fn main_loop() -> Result<(), String> {
                 } else {
                 }
 
-        time_from_last_packet_compare = SystemTime::now();
+                time_from_last_packet_compare = SystemTime::now();
             }
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
             Err(_) => {
@@ -234,7 +250,6 @@ fn main_loop() -> Result<(), String> {
         thread::sleep(time::Duration::from_millis(32));
     });
     while running {
-
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if delta.as_millis() / 10 != 0 {
             //   println!("FPS: {}", 100 / (delta.as_millis()/10));
@@ -254,12 +269,21 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::W),
                     ..
                 } => {
+                    if !w {
+                        tilting = true;
+
+                        do_not_move = false;
+                    }
                     w = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
+                    if !a {
+                        tilting = true;
+                        do_not_move = false;
+                    }
                     a = true;
                 }
                 Event::KeyDown {
@@ -284,6 +308,10 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
+                    if !d {
+                        tilting = true;
+                        do_not_move = false;
+                    }
                     d = true;
                 }
 
@@ -293,30 +321,35 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     w = false;
+                    w_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
                     a = false;
+                    a_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::S),
                     ..
                 } => {
                     s = false;
+                    s_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
                     d = false;
+                    d_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::J),
                     ..
                 } => {
                     j = false;
+                    j_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::K),
@@ -328,12 +361,18 @@ fn main_loop() -> Result<(), String> {
             }
         }
 
+        if tilting && j {
+            smashing = true;
+        }
+        if smashing {
+            smash_change += delta.as_millis();
+        }
+        else {
+            smash_change = 1;
+        }
         canvas.set_draw_color(bg_color);
         canvas.clear();
 
-        if w {
-            entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
-        }
         if !entities
             .lock()
             .unwrap()
@@ -341,16 +380,23 @@ fn main_loop() -> Result<(), String> {
             .unwrap()
             .move_lock
         {
-            if a {
+            if a && !smashing && !do_not_move {
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
 
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, 0.5);
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
             }
-            if d {
+            if d && !smashing && !do_not_move {
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, 0.5);
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
+            }
+        }
+        if tilting {
+            tilt_change += delta.as_millis();
+            if tilt_change > tilt_time {
+                tilt_change = 0;
+                tilting = false;
             }
         }
         let next_step_y = entities
@@ -360,11 +406,47 @@ fn main_loop() -> Result<(), String> {
             .unwrap()
             .next_step
             .1;
-        if !a && !d && next_step_y == 0.0 {
+        if !a && !d && next_step_y == 0.0 || smashing{
             let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
             entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(0.0, 0.87);
         }
-        if j {
+        if j_released {
+            if (a || d) && hit_change > Action::action(ClassType::Ant, ActionType::Slide, smash_change).hit_time && smashing{
+
+                    let hit_type = ActionType::SideSmash;
+                    smashing = false;
+                    do_not_move = true;
+
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, smash_change));
+                hit_change = 0.0;
+                j_released = false;
+            }
+            if w && hit_change > Action::action(ClassType::Ant, ActionType::Uair, smash_change).hit_time && smashing {
+                let mut hit_type = ActionType::Uair;
+                    hit_type = ActionType::UpSmash;
+                    smashing = false;
+                    do_not_move = true;
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(ClassType::Ant, ActionType::Uair, smash_change),
+                    );
+                hit_change = 0.0;
+                w_released = false;
+                j_released = false;
+            }
+                j_released = false;
+        }
+        if j && !smashing{
             if !a
                 && !d
                 && !w
@@ -377,17 +459,15 @@ fn main_loop() -> Result<(), String> {
                     .next_step
                     .1
                     == 0.0
-                && hit_change > Action::action(ClassType::ant, ActionType::jab).hit_time
+                && hit_change > Action::action(ClassType::Ant, ActionType::Jab, 1).hit_time
             {
+                let mut hit_type = ActionType::Jab;
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(
-                        delta.as_millis(),
-                        Action::action(ClassType::ant, ActionType::jab),
-                    );
+                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, 1));
                 hit_change = 0.0;
             }
             if !a
@@ -402,7 +482,7 @@ fn main_loop() -> Result<(), String> {
                     .next_step
                     .1
                     != 0.0
-                && hit_change > Action::action(ClassType::ant, ActionType::nair).hit_time
+                && hit_change > Action::action(ClassType::Ant, ActionType::Nair, 1).hit_time
             {
                 entities
                     .lock()
@@ -411,11 +491,23 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(ClassType::ant, ActionType::nair),
+                        Action::action(ClassType::Ant, ActionType::Nair, 1),
                     );
                 hit_change = 0.0;
             }
-            if (a || d) && hit_change > Action::action(ClassType::ant, ActionType::slide).hit_time {
+            if (a || d) && hit_change > Action::action(ClassType::Ant, ActionType::Slide, 1).hit_time {
+                let mut hit_type = ActionType::Slide;
+
+                entities
+                    .lock()
+                    .unwrap()
+                    .get_mut(&player_id)
+                    .unwrap()
+                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, 1));
+                hit_change = 0.0;
+            }
+            if w && hit_change > Action::action(ClassType::Ant, ActionType::Uair, 1).hit_time {
+                let mut hit_type = ActionType::Uair;
                 entities
                     .lock()
                     .unwrap()
@@ -423,21 +515,10 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(ClassType::ant, ActionType::slide),
+                        Action::action(ClassType::Ant, ActionType::Uair, 1),
                     );
                 hit_change = 0.0;
-            }
-            if w && hit_change > Action::action(ClassType::ant, ActionType::uair).hit_time {
-                entities
-                    .lock()
-                    .unwrap()
-                    .get_mut(&player_id)
-                    .unwrap()
-                    .execute_action(
-                        delta.as_millis(),
-                        Action::action(ClassType::ant, ActionType::uair),
-                    );
-                hit_change = 0.0;
+                w_released = false;
             }
             if s && entities
                 .lock()
@@ -447,26 +528,31 @@ fn main_loop() -> Result<(), String> {
                 .next_step
                 .1
                 > 0.0
-                && hit_change > Action::action(ClassType::ant, ActionType::dair).hit_time
+                && hit_change > Action::action(ClassType::Ant, ActionType::Dair, 1).hit_time
             {
+                let mut hit_type = ActionType::Dair;
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(
-                        delta.as_millis(),
-                        Action::action(ClassType::ant, ActionType::dair),
-                    );
+                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, 1));
                 hit_change = 0.0;
             }
-            j = false;
+
+        }
+        if !a && !d && !w {
+            smashing = false;
+            do_not_move = false;
+        }
+        if w && !smashing && !do_not_move {
+            entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             e.tick(delta.as_millis());
         }
         for (id, e) in network_entities.lock().unwrap().iter_mut() {
-           // e.tick(*time_from_last_packet_main.lock().unwrap());
+            // e.tick(*time_from_last_packet_main.lock().unwrap());
         }
         let mut entities_network_clone = network_entities.lock().unwrap().clone();
 
@@ -541,10 +627,10 @@ fn main_loop() -> Result<(), String> {
                 for hitbox in &e.hitboxes {
                     canvas.set_draw_color(Color::RGB(255, 130, 210));
                     canvas.draw_rect(Rect::new(
-                        (hitbox.x as f32* SCALE) as i32,
-                        (hitbox.y as f32* SCALE) as i32,
-                        (hitbox.w as f32* SCALE) as u32,
-                        (hitbox.h as f32* SCALE) as u32,
+                        (hitbox.x as f32 * SCALE) as i32,
+                        (hitbox.y as f32 * SCALE) as i32,
+                        (hitbox.w as f32 * SCALE) as u32,
+                        (hitbox.h as f32 * SCALE) as u32,
                     ));
                 }
             }

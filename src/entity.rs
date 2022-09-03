@@ -1,20 +1,22 @@
-use lerp::Lerp;
-use serde::{Deserialize, Serialize};
 use crate::graphics::Sprite;
 use crate::network::*;
+use lerp::Lerp;
+use serde::{Deserialize, Serialize};
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
+const SMASH_RATIO: f32 = 750.0;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ActionType {
-    jab,
-    nair,
-    dair,
-    uair,
-    slide,
-    smash,
+    Jab,
+    Nair,
+    Dair,
+    Uair,
+    Slide,
+    SideSmash,
+    UpSmash,
 }
 pub enum ClassType {
-    ant,
+    Ant,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -98,81 +100,97 @@ pub struct Action {
     pub damage: f32,
     pub hit_time: f32,
     pub duration: f32,
-    pub action: ActionType, 
+    pub action: ActionType,
 }
 impl Action {
-    pub fn action(class: ClassType, action: ActionType) -> Action {
+    pub fn action(class: ClassType, action: ActionType, smash_change: u128) -> Action {
+        
+        let mut hit_ratio = smash_change as f32 / SMASH_RATIO;
+        if smash_change == 1 {
+            hit_ratio = 1.0;
+        }
         match action {
-            ActionType::jab => Action {
+            ActionType::Jab => Action {
                 w: 12.0,
                 h: 12.0,
                 x: 2.0,
                 y: 4.0,
-                knock_x: 2.0,
-                knock_y: 2.0,
-                damage: 2.0,
+                knock_x: 10.0 * hit_ratio,
+                knock_y: 10.0 * hit_ratio,
+                damage: 10.0,
                 hit_time: 1000.0,
                 duration: 100.0,
                 action: action,
             },
 
-            ActionType::slide => Action {
+            ActionType::Slide => Action {
                 w: 12.0,
                 h: 12.0,
                 x: -8.0,
                 y: 4.0,
-                knock_x: 10.0,
-                knock_y: 10.0,
-                damage: 15.0,
+                knock_x: 10.0 * hit_ratio,
+                knock_y: 10.0 * hit_ratio,
+                damage: 15.0 * hit_ratio,
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
-
             },
-            ActionType::nair => Action {
+            ActionType::Nair => Action {
                 w: 12.0,
                 h: 12.0,
                 x: -8.0,
                 y: 4.0,
-                knock_x: 20.0,
-                knock_y: 20.0,
-                damage: 20.0,
+                knock_x: 20.0 * hit_ratio,
+                knock_y: 20.0 * hit_ratio,
+                damage: 20.0 * hit_ratio,
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
             },
-            ActionType::uair => Action {
+            ActionType::Uair => Action {
                 w: 12.0,
                 h: 12.0,
                 x: -8.0,
                 y: -8.0,
-                knock_x: 25.0,
-                knock_y: 25.0,
-                damage: 25.0,
+                knock_x: 25.0 * hit_ratio,
+                knock_y: 25.0 * hit_ratio,
+                damage: 25.0 * hit_ratio,
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
             },
-            ActionType::dair => Action {
+            ActionType::Dair => Action {
                 w: 12.0,
                 h: 12.0,
                 x: -8.0,
                 y: 14.0,
-                knock_x: 25.0,
-                knock_y: 25.0,
-                damage: 25.0,
+                knock_x: 25.0 * hit_ratio,
+                knock_y: 25.0 * hit_ratio,
+                damage: 25.0 * hit_ratio,
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
             },
-            ActionType::smash => Action {
+            ActionType::SideSmash => Action {
                 w: 12.0,
-                h: 4.0,
+                h: 12.0,
+                x: 2.0,
+                y: 4.0,
+                knock_x: 30.0 * hit_ratio,
+                knock_y: 30.0 * hit_ratio,
+                damage: 40.0 * hit_ratio,
+                hit_time: 1000.0,
+                duration: 100.0,
+                action: action,
+            },
+            ActionType::UpSmash => Action {
+                w: 12.0,
+                h: 12.0,
                 x: -8.0,
-                y: 8.0,
-                knock_x: 50.0,
-                knock_y: 50.0,
-                damage: 40.0,
+                y: -8.0,
+                knock_x: 40.0 * hit_ratio,
+                knock_y: 40.0 * hit_ratio,
+                damage: 40.0 * hit_ratio,
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
@@ -182,7 +200,7 @@ impl Action {
 }
 pub struct Class {}
 impl Class {
-    pub fn ant() -> Class {
+    pub fn Ant() -> Class {
         Class {}
     }
 }
@@ -240,7 +258,7 @@ impl Entity {
         if self.inv_change < self.inv_time {
             return;
         }
-        let hitbox_action = Action::action(ClassType::ant, hitbox.action.clone());
+        let hitbox_action = Action::action(ClassType::Ant, hitbox.action.clone(), 1);
         let hit_multiplier = 1.0 + self.hp as f32 / 100.0;
         let hit_multiplier_knock = 3.0 + self.hp as f32 / 50.0;
         if hitbox.dir {
