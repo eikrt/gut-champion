@@ -3,7 +3,19 @@ use serde::{Deserialize, Serialize};
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct NetworkBare{
+pub enum ActionType {
+    jab,
+    nair,
+    dair,
+    uair,
+    slide,
+    smash,
+}
+pub enum ClassType{
+    ant,
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkBare {
     pub x: f32,
     pub y: f32,
     pub w: f32,
@@ -33,7 +45,7 @@ pub struct HitBox {
 }
 
 impl AsNetworkBare for HitBox {
-    fn get_as_network_bare(&self) -> NetworkBare{
+    fn get_as_network_bare(&self) -> NetworkBare {
         NetworkBare {
             x: self.x,
             y: self.y,
@@ -41,7 +53,7 @@ impl AsNetworkBare for HitBox {
             h: self.h,
             dir: self.dir,
             action: self.action.clone(),
-            active: self.active
+            active: self.active,
         }
     }
 }
@@ -66,18 +78,20 @@ pub struct Entity {
     pub inv_change: f32,
 }
 impl AsNetworkEntity for Entity {
-    fn get_as_network_entity(&self) -> NetworkEntity{
+    fn get_as_network_entity(&self) -> NetworkEntity {
         NetworkEntity {
             x: self.x,
             y: self.y,
-            dx: self.dx,
-            dy: self.dy,
             hp: self.hp,
             dir: self.dir,
-            hitboxes: self.hitboxes.clone().into_iter().map(|h| h.get_as_network_bare()).collect(),
+            hitboxes: self
+                .hitboxes
+                .clone()
+                .into_iter()
+                .map(|h| h.get_as_network_bare())
+                .collect(),
             name: self.name.clone(),
             current_sprite: self.current_sprite.clone(),
-
         }
     }
 }
@@ -85,8 +99,6 @@ impl AsNetworkEntity for Entity {
 pub struct NetworkEntity {
     pub x: f32,
     pub y: f32,
-    pub dx: f32,
-    pub dy: f32,
     pub hp: i32,
     pub dir: bool,
     pub hitboxes: Vec<NetworkBare>,
@@ -107,82 +119,75 @@ pub struct Action {
     pub duration: f32,
 }
 impl Action {
-    pub fn jab(class: Class) -> Action {
-        Action {
-            w: 12.0,
-            h: 12.0,
-            x: 2.0,
-            y: 4.0,
-            knock_x: 2.0,
-            knock_y: 2.0,
-            damage: 2.0,
-            hit_time: 1000.0,
-            duration: 100.0,
-        }
-    }
-    pub fn slide(class: Class) -> Action {
-        Action {
-            w: 12.0,
-            h: 12.0,
-            x: -8.0,
-            y: 4.0,
-            knock_x: 10.0,
-            knock_y: 10.0,
-            damage: 15.0,
-            hit_time: 1000.0,
-            duration: 750.0,
-        }
-    }
-    pub fn nair(class: Class) -> Action {
-        Action {
-            w: 12.0,
-            h: 12.0,
-            x: -8.0,
-            y: 4.0,
-            knock_x: 20.0,
-            knock_y: 20.0,
-            damage: 20.0,
-            hit_time: 1000.0,
-            duration: 750.0,
-        }
-    }
-    pub fn up(class: Class) -> Action {
-        Action {
-            w: 12.0,
-            h: 12.0,
-            x: -8.0,
-            y: -8.0,
-            knock_x: 25.0,
-            knock_y: 25.0,
-            damage: 25.0,
-            hit_time: 1000.0,
-            duration: 750.0,
-        }
-    }
-    pub fn down(class: Class) -> Action {
-        Action {
-            w: 12.0,
-            h: 12.0,
-            x: -8.0,
-            y: 14.0,
-            knock_x: 25.0,
-            knock_y: 25.0,
-            damage: 25.0,
-            hit_time: 1000.0,
-            duration: 750.0,
-        }
-    }
-    pub fn smash (class: Class) -> Action {
-        Action {
-            w: 12.0,
-            h: 4.0,
-            x: -8.0,
-            y: 8.0,
-            knock_x: 50.0,
-            knock_y: 50.0,
-            damage: 40.0,
-            hit_time: 1000.0,
-            duration: 750.0,
+    pub fn action(class: ClassType, action: ActionType) -> Action {
+        match action {
+            ActionType::jab => Action {
+                w: 12.0,
+                h: 12.0,
+                x: 2.0,
+                y: 4.0,
+                knock_x: 2.0,
+                knock_y: 2.0,
+                damage: 2.0,
+                hit_time: 1000.0,
+                duration: 100.0,
+            },
+
+            ActionType::slide => Action {
+                w: 12.0,
+                h: 12.0,
+                x: -8.0,
+                y: 4.0,
+                knock_x: 10.0,
+                knock_y: 10.0,
+                damage: 15.0,
+                hit_time: 1000.0,
+                duration: 750.0,
+            },
+            ActionType::nair => Action {
+                w: 12.0,
+                h: 12.0,
+                x: -8.0,
+                y: 4.0,
+                knock_x: 20.0,
+                knock_y: 20.0,
+                damage: 20.0,
+                hit_time: 1000.0,
+                duration: 750.0,
+            },
+            ActionType::uair => Action {
+                w: 12.0,
+                h: 12.0,
+                x: -8.0,
+                y: -8.0,
+                knock_x: 25.0,
+                knock_y: 25.0,
+                damage: 25.0,
+                hit_time: 1000.0,
+                duration: 750.0,
+            },
+            ActionType::dair => Action {
+                w: 12.0,
+                h: 12.0,
+                x: -8.0,
+                y: 14.0,
+                knock_x: 25.0,
+                knock_y: 25.0,
+                damage: 25.0,
+                hit_time: 1000.0,
+                duration: 750.0,
+            },
+            ActionType::smash => Action {
+                w: 12.0,
+                h: 4.0,
+                x: -8.0,
+                y: 8.0,
+                knock_x: 50.0,
+                knock_y: 50.0,
+                damage: 40.0,
+                hit_time: 1000.0,
+                duration: 750.0,
+            },
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::entity::{
-    Action, AsNetworkBare, AsNetworkEntity, Class, Entity, NetworkBare, NetworkEntity,
+    Action, AsNetworkBare, AsNetworkEntity, Class, Entity, NetworkBare, NetworkEntity, ClassType, ActionType
 };
 use crate::environment::*;
 use crate::network::*;
@@ -154,7 +154,7 @@ fn main_loop() -> Result<(), String> {
             current_sprite: "weatherant".to_string(),
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::jab(Class::ant()),
+            current_action: Action::action(ClassType::ant, ActionType::jab),
             name: player_name.to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -182,7 +182,7 @@ fn main_loop() -> Result<(), String> {
             current_sprite: "ground".to_string(),
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::jab(Class::ant()),
+            current_action: Action::action(ClassType::ant, ActionType::jab),
             name: "obstacle".to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -222,7 +222,7 @@ fn main_loop() -> Result<(), String> {
                     continue;
                 }
 
-                if !network_entities_thread.lock().unwrap().contains_key(&state_ref.id) {
+                if !network_entities_thread.lock().unwrap().contains_key(&state_ref.id) && state_ref.id != player_id {
                     network_entities_thread
                         .lock()
                         .unwrap()
@@ -418,14 +418,14 @@ fn main_loop() -> Result<(), String> {
                     .next_step
                     .1
                     == 0.0
-                && hit_change > Action::jab(Class::ant()).hit_time
+                && hit_change > Action::action(ClassType::ant, ActionType::jab).hit_time
             {
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::jab(Class::ant()));
+                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::jab));
                 hit_change = 0.0;
             }
             if !a
@@ -440,32 +440,34 @@ fn main_loop() -> Result<(), String> {
                     .next_step
                     .1
                     != 0.0
-                && hit_change > Action::nair(Class::ant()).hit_time
+                && hit_change > Action::action(ClassType::ant, ActionType::nair).hit_time
             {
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::nair(Class::ant()));
+                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::nair))
+;
                 hit_change = 0.0;
             }
-            if (a || d) && hit_change > Action::slide(Class::ant()).hit_time {
+            if (a || d) && hit_change > Action::action(ClassType::ant, ActionType::slide).hit_time
+ {
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::slide(Class::ant()));
+                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::slide));
                 hit_change = 0.0;
             }
-            if w && hit_change > Action::up(Class::ant()).hit_time {
+            if w && hit_change > Action::action(ClassType::ant, ActionType::uair).hit_time {
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::up(Class::ant()));
+                    .execute_action(delta.as_millis(),Action::action(ClassType::ant, ActionType::uair));
                 hit_change = 0.0;
             }
             if s && entities
@@ -476,14 +478,14 @@ fn main_loop() -> Result<(), String> {
                 .next_step
                 .1
                 > 0.0
-                && hit_change > Action::down(Class::ant()).hit_time
+                && hit_change > Action::action(ClassType::ant, ActionType::dair).hit_time
             {
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::down(Class::ant()));
+                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::dair));
                 hit_change = 0.0;
             }
             j = false;
