@@ -1,5 +1,6 @@
 use crate::entity::{
-    Action, AsNetworkBare, AsNetworkEntity, Class, Entity, NetworkBare, NetworkEntity, ClassType, ActionType
+    Action, ActionType, AsNetworkBare, AsNetworkEntity, Class, ClassType, Entity, NetworkBare,
+    NetworkEntity,
 };
 use crate::environment::*;
 use crate::network::*;
@@ -38,8 +39,17 @@ const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
-const MSG_SIZE: usize = 116;
+const MSG_SIZE: usize = 128;
 const STATUS_FONT_SIZE: u16 = 200;
+
+fn is_zero(buf: &Vec<u8>) -> bool {
+    for byte in buf.into_iter() {
+        if *byte != 0 {
+            return false;
+        }
+    }
+    return true;
+}
 struct Camera {
     x: f32,
     y: f32,
@@ -57,8 +67,12 @@ pub fn get_text<'a, T>(
     font: &Font,
     texture_creator: &'a TextureCreator<T>,
 ) -> Option<Text<'a>> {
+    let mut message = msg.clone();
+    if msg.is_empty() {
+        message = "unknown".to_string();
+    }
     let text_surface = font
-        .render(&msg)
+        .render(&message)
         .blended(color)
         .map_err(|e| e.to_string())
         .ok()?;
@@ -206,10 +220,12 @@ fn main_loop() -> Result<(), String> {
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
     thread::spawn(move || loop {
         let mut buff = vec![0; MSG_SIZE];
-        match client.read(&mut buff) {
+        match client.read_exact(&mut buff) {
             Ok(_) => {
-                //let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
-
+                if is_zero(&buff) {
+                    println!("Received empty packet");
+                    continue;
+                }
                 let state: Option<SendState> = match bincode::deserialize(&buff) {
                     Ok(s) => Some(s),
                     Err(_) => None,
@@ -218,11 +234,14 @@ fn main_loop() -> Result<(), String> {
                     continue;
                 }
                 let state_ref = state.as_ref().unwrap();
-                if state_ref.player.current_sprite == "".to_string() {
-                    continue;
-                }
 
-                if !network_entities_thread.lock().unwrap().contains_key(&state_ref.id) && state_ref.id != player_id {
+
+                if !network_entities_thread
+                    .lock()
+                    .unwrap()
+                    .contains_key(&state_ref.id)
+                    && state_ref.id != player_id
+                {
                     network_entities_thread
                         .lock()
                         .unwrap()
@@ -257,8 +276,7 @@ fn main_loop() -> Result<(), String> {
         }
         //thread::sleep(::std::time::Duration::from_millis(10));
     });
-    thread::spawn(move || {
-        loop {
+    thread::spawn(move || loop {
         let msg = SendState {
             id: player_id,
             player: entities_send
@@ -273,7 +291,6 @@ fn main_loop() -> Result<(), String> {
             break;
         }
         thread::sleep(time::Duration::from_millis(32));
-        }
     });
     while running {
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
@@ -425,7 +442,10 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::jab));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(ClassType::ant, ActionType::jab),
+                    );
                 hit_change = 0.0;
             }
             if !a
@@ -447,18 +467,22 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::nair))
-;
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(ClassType::ant, ActionType::nair),
+                    );
                 hit_change = 0.0;
             }
-            if (a || d) && hit_change > Action::action(ClassType::ant, ActionType::slide).hit_time
- {
+            if (a || d) && hit_change > Action::action(ClassType::ant, ActionType::slide).hit_time {
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::slide));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(ClassType::ant, ActionType::slide),
+                    );
                 hit_change = 0.0;
             }
             if w && hit_change > Action::action(ClassType::ant, ActionType::uair).hit_time {
@@ -467,7 +491,10 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(),Action::action(ClassType::ant, ActionType::uair));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(ClassType::ant, ActionType::uair),
+                    );
                 hit_change = 0.0;
             }
             if s && entities
@@ -485,7 +512,10 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::ant, ActionType::dair));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(ClassType::ant, ActionType::dair),
+                    );
                 hit_change = 0.0;
             }
             j = false;
@@ -547,6 +577,9 @@ fn main_loop() -> Result<(), String> {
             }
         }
         for (id, e) in network_entities.lock().unwrap().iter_mut() {
+            if !&sprites.contains_key(e.current_sprite.as_str()) {
+                continue;
+            }
             let texture = &sprites[e.current_sprite.as_str()];
             canvas.copy(
                 texture,

@@ -8,7 +8,7 @@ use std::{
 use bincode;
 
 const IP: &str = "0.0.0.0:8888";
-const MSG_SIZE: usize = 116;
+const MSG_SIZE: usize = 128;
 
 fn sleep() {
     thread::sleep(::std::time::Duration::from_millis(10));
@@ -39,7 +39,7 @@ pub fn main() {
             thread::spawn(move || loop {
                 let mut buff = vec![0; MSG_SIZE];
 
-                match socket.read(&mut buff) {
+                match socket.read_exact(&mut buff) {
                     Ok(_) => {
                        // let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
                        // println!("{:?}", buff);
