@@ -1,4 +1,6 @@
-use crate::entity::{Action, Class, Entity, NetworkEntity, NetworkBare, AsNetworkEntity, AsNetworkBare};
+use crate::entity::{
+    Action, AsNetworkBare, AsNetworkEntity, Class, Entity, NetworkBare, NetworkEntity,
+};
 use crate::environment::*;
 use crate::network::*;
 use lerp::Lerp;
@@ -14,6 +16,7 @@ use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 
+use bincode;
 use sdl2::ttf::Font;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -35,7 +38,7 @@ const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
-const MSG_SIZE: usize = 512;
+const MSG_SIZE: usize = 128;
 const STATUS_FONT_SIZE: u16 = 200;
 struct Camera {
     x: f32,
@@ -157,8 +160,10 @@ fn main_loop() -> Result<(), String> {
             inv_time: 1000.0,
         },
     )])));
-    let mut network_entities: Arc<Mutex<HashMap<u64, NetworkEntity>>> = Arc::new(Mutex::new(HashMap::new()));
+    let mut network_entities: Arc<Mutex<HashMap<u64, NetworkEntity>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     let mut network_entities_thread = network_entities.clone();
+    let mut entities_send = entities.clone();
 
     let mut entities_thread = entities.clone();
     let mut environment: HashMap<u64, Entity> = HashMap::from([(
@@ -197,34 +202,32 @@ fn main_loop() -> Result<(), String> {
 
     let mut client = TcpStream::connect(ip).expect("Connection failed...");
     client.set_nonblocking(true);
-    let (tx, rx) = mpsc::channel::<String>();
+    let (tx, rx) = mpsc::channel::<SendState>();
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
     thread::spawn(move || loop {
         let mut buff = vec![0; MSG_SIZE];
         match client.read(&mut buff) {
             Ok(_) => {
-                let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
-                let s = match std::str::from_utf8(&msg) {
-                    Ok(v) => v,
-                    Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-                };
-                let state: Option<SendState> = match serde_json::from_str(&s) {
+                //let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+
+                let state: Option<SendState> = match bincode::deserialize(&buff) {
                     Ok(s) => Some(s),
                     Err(_) => None,
                 };
-
                 if state.is_none() {
                     continue;
                 }
                 let state_ref = state.as_ref().unwrap();
+                if state_ref.player.current_sprite == "".to_string() {
+                    continue;
+                }
 
-                if !entities_thread.lock().unwrap().contains_key(&state_ref.id) {
+                if !network_entities_thread.lock().unwrap().contains_key(&state_ref.id) {
                     network_entities_thread
                         .lock()
                         .unwrap()
                         .insert(state_ref.id, state_ref.player.clone());
                 } else if state_ref.id != player_id {
-                    
                     *network_entities_thread
                         .lock()
                         .unwrap()
@@ -242,15 +245,36 @@ fn main_loop() -> Result<(), String> {
 
         match rx.try_recv() {
             Ok(msg) => {
-                let mut buff = msg.clone().into_bytes();
-                buff.resize(MSG_SIZE, 0);
-                client.write_all(&buff).expect("writing to socket failed");
+                let encoded: Vec<u8> = bincode::serialize(&msg).unwrap();
+                // let mut buff = msg.clone().into_bytes();
+                // buff.resize(MSG_SIZE, 0);
+                client
+                    .write_all(&encoded)
+                    .expect("writing to socket failed");
             }
             Err(TryRecvError::Empty) => (),
             Err(TryRecvError::Disconnected) => break,
         }
+        //thread::sleep(::std::time::Duration::from_millis(10));
     });
-
+    thread::spawn(move || {
+        loop {
+        let msg = SendState {
+            id: player_id,
+            player: entities_send
+                .lock()
+                .unwrap()
+                .get(&player_id)
+                .unwrap()
+                .clone()
+                .get_as_network_entity(),
+        };
+        if tx.send(msg).is_err() {
+            break;
+        }
+        thread::sleep(time::Duration::from_millis(32));
+        }
+    });
     while running {
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if delta.as_millis() / 10 != 0 {
@@ -465,27 +489,26 @@ fn main_loop() -> Result<(), String> {
             j = false;
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
-          /*  if id != &player_id {
-                continue;
-            }
-*/
+            /*  if id != &player_id {
+                            continue;
+                        }
+            */
             e.tick(delta.as_millis());
         }
         let mut entities_network_clone = network_entities.lock().unwrap().clone();
 
         for (id, e) in entities.lock().unwrap().iter_mut() {
-                for env in environment.values_mut() {
-                    e.collide_with(delta.as_millis(), env);
+            for env in environment.values_mut() {
+                e.collide_with(delta.as_millis(), env);
+            }
+            for (o_id, o_e) in entities_network_clone.iter() {
+                if o_id == &player_id {
+                    continue;
                 }
-                for (o_id, o_e) in entities_network_clone.iter() {
-                    if o_id == &player_id {
-                        continue;
-                    }
-                    e.collide_with_hitboxes(delta.as_millis(), o_e);
-                }
+                e.collide_with_hitboxes(delta.as_millis(), o_e);
+            }
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
-
             e.execute_movement();
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
@@ -644,14 +667,6 @@ fn main_loop() -> Result<(), String> {
         canvas.present();
         compare_time = SystemTime::now();
 
-        let msg = serde_json::to_string(&SendState {
-            id: player_id,
-            player: entities.lock().unwrap().get(&player_id).unwrap().clone().get_as_network_entity(),
-        })
-        .unwrap();
-        if tx.send(msg).is_err() {
-            break;
-        }
         thread::sleep(time::Duration::from_millis(10));
     }
 
