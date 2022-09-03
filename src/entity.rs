@@ -1,3 +1,4 @@
+use lerp::Lerp;
 use serde::{Deserialize, Serialize};
 
 const GRAVITY: f32 = 5.0;
@@ -117,7 +118,30 @@ pub struct NetworkEntity {
     pub current_sprite: String,
     //pub collide_directions: (bool, bool, bool, bool),
 }
-
+impl NetworkEntity {
+    pub fn tick(&mut self, delta: u128) {
+        let next_step = self.calculate_step(delta);
+        self.execute_movement(next_step);
+        //println!("old {}", self.x);
+        //self.x = self.x.lerp(self.x + next_step.0, 10.0 / delta as f32);
+        //
+        //println!("new {}", self.x);
+        //
+    }
+    pub fn execute_movement(&mut self, next_step: (f32,f32)) {
+        self.move_to(next_step)
+    }
+    pub fn move_to(&mut self, step: (f32, f32)) {
+        self.x += step.0;
+        self.y += step.1;
+    }
+    pub fn calculate_step(&mut self, delta: u128) -> (f32, f32) {
+        let mut next_step = (0.0, 0.0);
+        next_step.0 = (self.dx * delta as f32) as f32 / 1000.0;
+        next_step.1 = (self.dy * delta as f32) as f32 / 1000.0;
+        next_step
+    }
+}
 /*impl NetworkEntity {
     pub fn tick(&mut self, delta: u128) {
         self.dy += GRAVITY;

@@ -174,6 +174,9 @@ fn main_loop() -> Result<(), String> {
             inv_time: 1000.0,
         },
     )])));
+    let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
+    let mut time_from_last_packet_main: Arc<Mutex<u128>> =  time_from_last_packet.clone();
+    let mut time_from_last_packet_compare = SystemTime::now(); 
     let mut network_entities: Arc<Mutex<HashMap<u64, NetworkEntity>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let mut network_entities_thread = network_entities.clone();
@@ -219,8 +222,11 @@ fn main_loop() -> Result<(), String> {
     let (tx, rx) = mpsc::channel::<SendState>();
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
     thread::spawn(move || loop {
+
+        *time_from_last_packet.lock().unwrap() = SystemTime::now().duration_since(time_from_last_packet_compare).unwrap().as_millis();
+
         let mut buff = vec![0; MSG_SIZE];
-        match client.read_exact(&mut buff) {
+        match client.read(&mut buff) {
             Ok(_) => {
                 if is_zero(&buff) {
                     println!("Received empty packet");
@@ -234,6 +240,9 @@ fn main_loop() -> Result<(), String> {
                     continue;
                 }
                 let state_ref = state.as_ref().unwrap();
+                if state_ref.player.name.is_empty() {
+                    continue;
+                }
 
 
                 if !network_entities_thread
@@ -254,6 +263,8 @@ fn main_loop() -> Result<(), String> {
                         .unwrap() = state_ref.player.clone();
                 } else {
                 }
+
+        time_from_last_packet_compare = SystemTime::now();
             }
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
             Err(_) => {
@@ -293,6 +304,7 @@ fn main_loop() -> Result<(), String> {
         thread::sleep(time::Duration::from_millis(32));
     });
     while running {
+
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if delta.as_millis() / 10 != 0 {
             //   println!("FPS: {}", 100 / (delta.as_millis()/10));
@@ -523,9 +535,9 @@ fn main_loop() -> Result<(), String> {
         for (id, e) in entities.lock().unwrap().iter_mut() {
             e.tick(delta.as_millis());
         }
-        /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
-            e.tick(delta.as_millis());
-        }*/
+        for (id, e) in network_entities.lock().unwrap().iter_mut() {
+            e.tick(*time_from_last_packet_main.lock().unwrap());
+        }
         let mut entities_network_clone = network_entities.lock().unwrap().clone();
 
         for (id, e) in entities.lock().unwrap().iter_mut() {
@@ -620,6 +632,9 @@ fn main_loop() -> Result<(), String> {
             )?;
         }
         for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
+            if e.1.name.is_empty() {
+                continue;
+            }
             let name_text = get_text(
                 e.1.name.clone(),
                 Color::RGBA(0, 0, 0, 255),
