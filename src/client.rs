@@ -38,7 +38,7 @@ const SCALE: f32 = 4.0;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = true;
-const MSG_SIZE: usize = 128;
+const MSG_SIZE: usize = 96;
 const STATUS_FONT_SIZE: u16 = 200;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
@@ -280,9 +280,9 @@ fn main_loop() -> Result<(), String> {
 
         match rx.try_recv() {
             Ok(msg) => {
-                let encoded: Vec<u8> = bincode::serialize(&msg).unwrap();
+                let mut encoded: Vec<u8> = bincode::serialize(&msg).unwrap();
                 // let mut buff = msg.clone().into_bytes();
-                // buff.resize(MSG_SIZE, 0);
+                encoded.resize(MSG_SIZE, 0);
                 client
                     .write_all(&encoded)
                     .expect("writing to socket failed");
@@ -306,7 +306,7 @@ fn main_loop() -> Result<(), String> {
         if tx.send(msg).is_err() {
             break;
         }
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(32));
     });
     while running {
 
@@ -616,10 +616,10 @@ fn main_loop() -> Result<(), String> {
                 for hitbox in &e.hitboxes {
                     canvas.set_draw_color(Color::RGB(255, 130, 210));
                     canvas.draw_rect(Rect::new(
-                        (hitbox.x * SCALE) as i32,
-                        (hitbox.y * SCALE) as i32,
-                        (hitbox.w * SCALE) as u32,
-                        (hitbox.h * SCALE) as u32,
+                        (hitbox.x as f32* SCALE) as i32,
+                        (hitbox.y as f32* SCALE) as i32,
+                        (hitbox.w as f32* SCALE) as u32,
+                        (hitbox.h as f32* SCALE) as u32,
                     ));
                 }
             }

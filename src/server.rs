@@ -8,7 +8,7 @@ use std::{
 use bincode;
 
 const IP: &str = "0.0.0.0:8888";
-const MSG_SIZE: usize = 128;
+const MSG_SIZE: usize = 96;
 
 fn sleep() {
     thread::sleep(::std::time::Duration::from_millis(10));
@@ -71,7 +71,7 @@ pub fn main() {
                 .into_iter()
                 .filter_map(|mut client| {
                     let mut buff = msg.clone();
-                    //buff.resize(MSG_SIZE, 0);
+                    buff.resize(MSG_SIZE, 0);
                     client.write_all(&buff).map(|_| client).ok()
                 })
                 .collect::<Vec<_>>();

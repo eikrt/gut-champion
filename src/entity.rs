@@ -18,10 +18,10 @@ pub enum ClassType {
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkBare {
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
     pub active: bool,
     pub dir: bool,
     pub action: ActionType,
@@ -49,10 +49,10 @@ pub struct HitBox {
 impl AsNetworkBare for HitBox {
     fn get_as_network_bare(&self) -> NetworkBare {
         NetworkBare {
-            x: self.x,
-            y: self.y,
-            w: self.w,
-            h: self.h,
+            x: self.x as i32,
+            y: self.y as i32,
+            w: self.w as i32,
+            h: self.h as i32,
             dir: self.dir,
             action: self.action.action.clone(),
             active: self.active,
@@ -405,10 +405,10 @@ impl Entity {
     }
     pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
         for hitbox in &other.hitboxes {
-            if self.x + self.w / 2.0 + self.next_step.0 > hitbox.x
-                && self.x + self.w / 2.0 + self.next_step.0 < hitbox.x + hitbox.w
-                && self.y + self.h / 2.0 + self.next_step.1 > hitbox.y
-                && self.y + self.h / 2.0 + self.next_step.1 < hitbox.y + hitbox.h
+            if self.x + self.w / 2.0 + self.next_step.0 > hitbox.x as f32
+                && self.x + self.w / 2.0 + self.next_step.0 < (hitbox.x + hitbox.w) as f32
+                && self.y + self.h / 2.0 + self.next_step.1 > hitbox.y as f32
+                && self.y + self.h / 2.0 + self.next_step.1 < (hitbox.y + hitbox.h) as f32
             {
                 self.take_hit(delta, &hitbox);
             }
