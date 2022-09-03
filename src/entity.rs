@@ -1,5 +1,6 @@
 use lerp::Lerp;
 use serde::{Deserialize, Serialize};
+use crate::client::Sprite;
 
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
@@ -23,7 +24,7 @@ pub struct NetworkBare {
     pub h: f32,
     pub active: bool,
     pub dir: bool,
-    pub action: Action,
+    pub action: ActionType,
 }
 pub trait AsNetworkBare {
     fn get_as_network_bare(&self) -> NetworkBare;
@@ -53,7 +54,7 @@ impl AsNetworkBare for HitBox {
             w: self.w,
             h: self.h,
             dir: self.dir,
-            action: self.action.clone(),
+            action: self.action.action.clone(),
             active: self.active,
         }
     }
@@ -70,7 +71,7 @@ pub struct Entity {
     pub dir: bool,
     pub next_step: (f32, f32),
     pub collide_directions: (bool, bool, bool, bool),
-    pub current_sprite: String,
+    pub current_sprite: Sprite,
     pub hitboxes: Vec<HitBox>,
     pub move_lock: bool,
     pub current_action: Action,
@@ -115,13 +116,13 @@ pub struct NetworkEntity {
     pub dir: bool,
     pub hitboxes: Vec<NetworkBare>,
     pub name: String,
-    pub current_sprite: String,
+    pub current_sprite: Sprite,
     //pub collide_directions: (bool, bool, bool, bool),
 }
 impl NetworkEntity {
     pub fn tick(&mut self, delta: u128) {
-        let next_step = self.calculate_step(delta);
-        self.execute_movement(next_step);
+        //let next_step = self.calculate_step(delta);
+        //self.execute_movement(next_step);
         //println!("old {}", self.x);
         //self.x = self.x.lerp(self.x + next_step.0, 10.0 / delta as f32);
         //
@@ -201,6 +202,7 @@ pub struct Action {
     pub damage: f32,
     pub hit_time: f32,
     pub duration: f32,
+    pub action: ActionType, 
 }
 impl Action {
     pub fn action(class: ClassType, action: ActionType) -> Action {
@@ -215,6 +217,7 @@ impl Action {
                 damage: 2.0,
                 hit_time: 1000.0,
                 duration: 100.0,
+                action: action,
             },
 
             ActionType::slide => Action {
@@ -227,6 +230,8 @@ impl Action {
                 damage: 15.0,
                 hit_time: 1000.0,
                 duration: 750.0,
+                action: action,
+
             },
             ActionType::nair => Action {
                 w: 12.0,
@@ -238,6 +243,7 @@ impl Action {
                 damage: 20.0,
                 hit_time: 1000.0,
                 duration: 750.0,
+                action: action,
             },
             ActionType::uair => Action {
                 w: 12.0,
@@ -249,6 +255,7 @@ impl Action {
                 damage: 25.0,
                 hit_time: 1000.0,
                 duration: 750.0,
+                action: action,
             },
             ActionType::dair => Action {
                 w: 12.0,
@@ -260,6 +267,7 @@ impl Action {
                 damage: 25.0,
                 hit_time: 1000.0,
                 duration: 750.0,
+                action: action,
             },
             ActionType::smash => Action {
                 w: 12.0,
@@ -271,6 +279,7 @@ impl Action {
                 damage: 40.0,
                 hit_time: 1000.0,
                 duration: 750.0,
+                action: action,
             },
         }
     }
@@ -335,17 +344,18 @@ impl Entity {
         if self.inv_change < self.inv_time {
             return;
         }
+        let hitbox_action = Action::action(ClassType::ant, hitbox.action.clone());
         let hit_multiplier = 1.0 + self.hp as f32 / 100.0;
         let hit_multiplier_knock = 3.0 + self.hp as f32 / 50.0;
         if hitbox.dir {
-            self.dx += 5.0 + hitbox.action.knock_x * hit_multiplier_knock;
-            self.dy -= 5.0 + hitbox.action.knock_y * hit_multiplier_knock;
-            self.hp += (hitbox.action.damage * hit_multiplier) as i32;
+            self.dx += 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
+            self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
+            self.hp += (hitbox_action.damage * hit_multiplier) as i32;
         }
         if !hitbox.dir {
-            self.dx -= 5.0 + hitbox.action.knock_x * hit_multiplier_knock;
-            self.dy -= 5.0 + hitbox.action.knock_y * hit_multiplier_knock;
-            self.hp += (hitbox.action.damage * hit_multiplier) as i32;
+            self.dx -= 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
+            self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
+            self.hp += (hitbox_action.damage * hit_multiplier) as i32;
         }
 
         self.inv_change = 0.0;

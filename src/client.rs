@@ -37,11 +37,15 @@ use std::{thread, time};
 const SCALE: f32 = 4.0;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
-const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
 const MSG_SIZE: usize = 128;
 const STATUS_FONT_SIZE: u16 = 200;
 
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Sprite{
+    Ground,
+    Weatherant,
+}
 fn is_zero(buf: &Vec<u8>) -> bool {
     for byte in buf.into_iter() {
         if *byte != 0 {
@@ -138,10 +142,10 @@ fn main_loop() -> Result<(), String> {
     let mut hit_change = 0.0;
     let sprites = HashMap::from([
         (
-            "weatherant",
+            Sprite::Weatherant, 
             texture_creator.load_texture("res/player.png")?,
         ),
-        ("ground", texture_creator.load_texture("res/ground.png")?),
+        (Sprite::Ground, texture_creator.load_texture("res/ground.png")?),
     ]);
     let mut rng = rand::thread_rng();
     let args: Vec<String> = env::args().collect();
@@ -165,7 +169,7 @@ fn main_loop() -> Result<(), String> {
             hp: 0,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
-            current_sprite: "weatherant".to_string(),
+            current_sprite: Sprite::Weatherant,
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(ClassType::ant, ActionType::jab),
@@ -196,7 +200,7 @@ fn main_loop() -> Result<(), String> {
             hp: 0,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
-            current_sprite: "ground".to_string(),
+            current_sprite: Sprite::Ground,
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(ClassType::ant, ActionType::jab),
@@ -226,7 +230,7 @@ fn main_loop() -> Result<(), String> {
         *time_from_last_packet.lock().unwrap() = SystemTime::now().duration_since(time_from_last_packet_compare).unwrap().as_millis();
 
         let mut buff = vec![0; MSG_SIZE];
-        match client.read(&mut buff) {
+        match client.read_exact(&mut buff) {
             Ok(_) => {
                 if is_zero(&buff) {
                     println!("Received empty packet");
@@ -236,6 +240,7 @@ fn main_loop() -> Result<(), String> {
                     Ok(s) => Some(s),
                     Err(_) => None,
                 };
+                println!("state: {:?}", buff);
                 if state.is_none() {
                     continue;
                 }
@@ -301,7 +306,7 @@ fn main_loop() -> Result<(), String> {
         if tx.send(msg).is_err() {
             break;
         }
-        thread::sleep(time::Duration::from_millis(32));
+        thread::sleep(time::Duration::from_millis(100));
     });
     while running {
 
@@ -536,7 +541,7 @@ fn main_loop() -> Result<(), String> {
             e.tick(delta.as_millis());
         }
         for (id, e) in network_entities.lock().unwrap().iter_mut() {
-            e.tick(*time_from_last_packet_main.lock().unwrap());
+           // e.tick(*time_from_last_packet_main.lock().unwrap());
         }
         let mut entities_network_clone = network_entities.lock().unwrap().clone();
 
@@ -560,12 +565,15 @@ fn main_loop() -> Result<(), String> {
             e.execute_movement();
         }*/
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            let texture = &sprites[e.current_sprite.as_str()];
+            if !&sprites.contains_key(&e.current_sprite) {
+                continue;
+            }
+            let texture = &sprites.get(&e.current_sprite).unwrap();
             e.w = texture.query().width as f32;
             e.h = texture.query().height as f32;
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            let texture = &sprites[e.current_sprite.as_str()];
+            let texture = &sprites.get(&e.current_sprite).unwrap();
             canvas.copy(
                 texture,
                 Rect::new(0, 0, texture.query().width, texture.query().height),
@@ -589,10 +597,11 @@ fn main_loop() -> Result<(), String> {
             }
         }
         for (id, e) in network_entities.lock().unwrap().iter_mut() {
-            if !&sprites.contains_key(e.current_sprite.as_str()) {
+            if !&sprites.contains_key(&e.current_sprite) {
                 continue;
             }
-            let texture = &sprites[e.current_sprite.as_str()];
+
+            let texture = &sprites.get(&e.current_sprite).unwrap();
             canvas.copy(
                 texture,
                 Rect::new(0, 0, texture.query().width, texture.query().height),
@@ -616,7 +625,7 @@ fn main_loop() -> Result<(), String> {
             }
         }
         for e in environment.values_mut() {
-            let texture = &sprites[e.current_sprite.as_str()];
+            let texture = &sprites.get(&e.current_sprite).unwrap();
 
             e.w = texture.query().width as f32;
             e.h = texture.query().height as f32;
