@@ -38,7 +38,7 @@ const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const TILE_SIZE: f32 = 64.0;
 const SHOW_HITBOXES: bool = true;
-const MSG_SIZE: usize = 128;
+const MSG_SIZE: usize = 150;
 const STATUS_FONT_SIZE: u16 = 200;
 struct Camera {
     x: f32,
@@ -491,10 +491,9 @@ fn main_loop() -> Result<(), String> {
             j = false;
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
-            /*  if id != &player_id {
-                            continue;
-                        }
-            */
+            e.tick(delta.as_millis());
+        }
+        for (id, e) in network_entities.lock().unwrap().iter_mut() {
             e.tick(delta.as_millis());
         }
         let mut entities_network_clone = network_entities.lock().unwrap().clone();
@@ -504,13 +503,18 @@ fn main_loop() -> Result<(), String> {
                 e.collide_with(delta.as_millis(), env);
             }
             for (o_id, o_e) in entities_network_clone.iter() {
-                if o_id == &player_id {
-                    continue;
-                }
                 e.collide_with_hitboxes(delta.as_millis(), o_e);
             }
         }
+        for (id, e) in network_entities.lock().unwrap().iter_mut() {
+            for env in environment.values_mut() {
+                e.collide_with(delta.as_millis(), env);
+            }
+        }
         for (id, e) in entities.lock().unwrap().iter_mut() {
+            e.execute_movement();
+        }
+        for (id, e) in network_entities.lock().unwrap().iter_mut() {
             e.execute_movement();
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
