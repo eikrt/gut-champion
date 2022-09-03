@@ -8,7 +8,7 @@ use std::{
 use bincode;
 
 const IP: &str = "0.0.0.0:8888";
-const MSG_SIZE: usize = 150;
+const MSG_SIZE: usize = 116;
 
 fn sleep() {
     thread::sleep(::std::time::Duration::from_millis(10));

@@ -11,7 +11,7 @@ pub enum ActionType {
     slide,
     smash,
 }
-pub enum ClassType{
+pub enum ClassType {
     ant,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -86,10 +86,10 @@ impl AsNetworkEntity for Entity {
             dy: self.dy,
             hp: self.hp,
             dir: self.dir,
-            h: self.h,
-            w: self.w,
-            next_step: self.next_step,
-            collide_directions: self.collide_directions,
+            //h: self.h,
+            // w: self.w,
+            //next_step: self.next_step,
+            // collide_directions: self.collide_directions,
             hitboxes: self
                 .hitboxes
                 .clone()
@@ -107,18 +107,18 @@ pub struct NetworkEntity {
     pub y: f32,
     pub dx: f32,
     pub dy: f32,
-    pub w: f32,
-    pub h: f32,
-    pub next_step: (f32,f32),
+    //pub w: f32,
+    //pub h: f32,
+    //pub next_step: (f32,f32),
     pub hp: i32,
     pub dir: bool,
     pub hitboxes: Vec<NetworkBare>,
     pub name: String,
     pub current_sprite: String,
-    pub collide_directions: (bool, bool, bool, bool),
+    //pub collide_directions: (bool, bool, bool, bool),
 }
 
-impl NetworkEntity {
+/*impl NetworkEntity {
     pub fn tick(&mut self, delta: u128) {
         self.dy += GRAVITY;
         self.calculate_step(delta);
@@ -165,7 +165,7 @@ impl NetworkEntity {
             self.dx = 0.0;
         }
     }
-}
+}*/
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Action {
     pub w: f32,
