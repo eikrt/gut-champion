@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Sprite{
     Ground,
-    Weatherant,
+    Alchemist,
+    Commodore,
+    Basement,
 }
 
 pub struct Camera {

@@ -67,9 +67,18 @@ fn main_loop() -> Result<(), String> {
     let player_color = Color::RGB(128, 128, 0);
     let mut hit_change = 0.0;
     let sprites = HashMap::from([
+
         (
-            Sprite::Weatherant,
-            texture_creator.load_texture("res/player.png")?,
+            Sprite::Commodore,
+            texture_creator.load_texture("res/alchemist.png")?,
+        ),
+        (
+            Sprite::Alchemist,
+            texture_creator.load_texture("res/alchemist.png")?,
+        ),
+        (
+            Sprite::Basement,
+            texture_creator.load_texture("res/basement_bg.png")?,
         ),
         (
             Sprite::Ground,
@@ -102,7 +111,7 @@ fn main_loop() -> Result<(), String> {
             hp: 0,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
-            current_sprite: Sprite::Weatherant,
+            current_sprite: Sprite::Commodore,
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(ClassType::Ant, ActionType::Jab, 1),
@@ -575,6 +584,18 @@ fn main_loop() -> Result<(), String> {
         /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
             e.execute_movement();
         }*/
+        // draw bg 
+        let texture = &sprites.get(&Sprite::Basement).unwrap();
+        canvas.copy(
+            texture,
+            Rect::new(0, 0, texture.query().width, texture.query().height),
+            Rect::new(
+                (0.0 * SCALE as f32) as i32,
+                (0.0 * SCALE as f32) as i32,
+                texture.query().width * SCALE as u32,
+                texture.query().height * SCALE as u32,
+            ),
+        )?;
         for (id, e) in entities.lock().unwrap().iter_mut() {
             if !&sprites.contains_key(&e.current_sprite) {
                 continue;
