@@ -39,7 +39,7 @@ pub fn main() {
             thread::spawn(move || loop {
                 let mut buff = vec![0; MSG_SIZE];
 
-                match socket.read_exact(&mut buff) {
+                match socket.read(&mut buff) {
                     Ok(_) => {
                        // let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
                        // println!("{:?}", buff);
