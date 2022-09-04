@@ -39,7 +39,7 @@ const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = true;
 const MSG_SIZE: usize = 96;
 const STATUS_FONT_SIZE: u16 = 200;
-
+const STATUS_percentage_color: Color = Color::RGBA(255,255,195,255);
 fn main_loop() -> Result<(), String> {
     let mut ip: &str = "127.0.0.1:8888";
 
@@ -718,12 +718,14 @@ fn main_loop() -> Result<(), String> {
             }
         }
         for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
+            let hp_percentage_visual = e.1.hp as f32 / 200.0;
+            let percentage_color = Color::RGBA(STATUS_percentage_color.r,(STATUS_percentage_color.g as f32).lerp(0.0,hp_percentage_visual) as u8,(STATUS_percentage_color.b as f32).lerp(0.0,hp_percentage_visual) as u8,STATUS_percentage_color.a);
             if e.1.name.is_empty() {
                 continue;
             }
             let name_text = get_text(
                 e.1.name.clone(),
-                Color::RGBA(0, 0, 0, 255),
+                STATUS_percentage_color,
                 STATUS_FONT_SIZE,
                 &status_font,
                 &texture_creator,
@@ -743,7 +745,7 @@ fn main_loop() -> Result<(), String> {
             );
             let hp_text = get_text(
                 format!("{}%", e.1.hp),
-                Color::RGBA(0, 0, 0, 255),
+                percentage_color,
                 STATUS_FONT_SIZE,
                 &status_font,
                 &texture_creator,
@@ -763,9 +765,10 @@ fn main_loop() -> Result<(), String> {
             );
         }
         for (i, e) in entities.lock().unwrap().iter().enumerate() {
+            let percentage_color = Color::RGBA(STATUS_percentage_color.r,STATUS_percentage_color.g,STATUS_percentage_color.b,STATUS_percentage_color.a);
             let name_text = get_text(
                 e.1.name.clone(),
-                Color::RGBA(0, 0, 0, 255),
+                STATUS_percentage_color,
                 STATUS_FONT_SIZE,
                 &status_font,
                 &texture_creator,
@@ -785,7 +788,7 @@ fn main_loop() -> Result<(), String> {
             );
             let hp_text = get_text(
                 format!("{}%", e.1.hp),
-                Color::RGBA(0, 0, 0, 255),
+                percentage_color,
                 STATUS_FONT_SIZE,
                 &status_font,
                 &texture_creator,
