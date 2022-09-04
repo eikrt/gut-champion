@@ -1,3 +1,4 @@
+use crate::entity::{ActionType, ClassType};
 use sdl2::event::Event;
 use sdl2::image::{self, InitFlag, LoadTexture};
 use sdl2::keyboard::Keycode;
@@ -9,12 +10,48 @@ use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum Sprite{
+pub enum Sprite {
     Ground,
     Alchemist,
     Commodore,
+    CommodoreJab,
+    CommodoreNair,
+    CommodoreUair,
+    CommodoreDair,
+    CommodoreSair,
+    CommodoreSlide,
+    CommodoreSideSmash,
+    CommodoreUpSmash,
     Basement,
+    Placeholder,
+}
+pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
+    match class {
+        ClassType::Commodore => match action {
+            ActionType::Jab => Sprite::CommodoreJab,
+            ActionType::Nair => Sprite::CommodoreNair,
+            ActionType::Dair => Sprite::CommodoreDair,
+            ActionType::Uair => Sprite::CommodoreUair,
+            ActionType::Sair => Sprite::CommodoreSair,
+            ActionType::Slide => Sprite::CommodoreSlide,
+            ActionType::SideSmash => Sprite::CommodoreSideSmash,
+            ActionType::UpSmash => Sprite::CommodoreUpSmash,
+            ActionType::Idle => Sprite::Commodore,
+        },
+        ClassType::Alchemist => match action {
+            ActionType::Jab => Sprite::CommodoreJab,
+            ActionType::Nair => Sprite::CommodoreNair,
+            ActionType::Dair => Sprite::CommodoreDair,
+            ActionType::Uair => Sprite::CommodoreUair,
+            ActionType::Sair => Sprite::CommodoreSair,
+            ActionType::Slide => Sprite::CommodoreSlide,
+            ActionType::SideSmash => Sprite::CommodoreSideSmash,
+            ActionType::UpSmash => Sprite::CommodoreUpSmash,
+            ActionType::Idle => Sprite::Commodore,
+        },
+    }
 }
 
 pub struct Camera {

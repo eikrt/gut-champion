@@ -1,7 +1,7 @@
 use crate::entity::*;
 use crate::environment::*;
-use crate::graphics::Sprite;
 use crate::graphics::*;
+use crate::graphics::{get_animations, Sprite};
 use crate::network::*;
 use crate::network::*;
 use bincode;
@@ -13,7 +13,7 @@ use sdl2::image::{self, InitFlag, LoadTexture};
 use sdl2::keyboard::Keycode;
 use sdl2::mouse::MouseButton;
 use sdl2::pixels::Color;
-use sdl2::rect::Rect;
+use sdl2::rect::{Rect,Point};
 use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
@@ -39,7 +39,7 @@ const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = true;
 const MSG_SIZE: usize = 96;
 const STATUS_FONT_SIZE: u16 = 200;
-const STATUS_percentage_color: Color = Color::RGBA(255,255,195,255);
+const STATUS_percentage_color: Color = Color::RGBA(255, 255, 195, 255);
 fn main_loop() -> Result<(), String> {
     let mut ip: &str = "127.0.0.1:8888";
 
@@ -91,6 +91,38 @@ fn main_loop() -> Result<(), String> {
             texture_creator.load_texture("res/commodore.png")?,
         ),
         (
+            Sprite::CommodoreJab,
+            texture_creator.load_texture("res/commodore_jab.png")?,
+        ),
+        (
+            Sprite::CommodoreNair,
+            texture_creator.load_texture("res/commodore_nair.png")?,
+        ),
+        (
+            Sprite::CommodoreDair,
+            texture_creator.load_texture("res/commodore_dair.png")?,
+        ),
+        (
+            Sprite::CommodoreUair,
+            texture_creator.load_texture("res/commodore_uair.png")?,
+        ),
+        (
+            Sprite::CommodoreSair,
+            texture_creator.load_texture("res/commodore_sair.png")?,
+        ),
+        (
+            Sprite::CommodoreSlide,
+            texture_creator.load_texture("res/commodore_slide.png")?,
+        ),
+        (
+            Sprite::CommodoreSideSmash,
+            texture_creator.load_texture("res/commodore_side_smash.png")?,
+        ),
+        (
+            Sprite::CommodoreUpSmash,
+            texture_creator.load_texture("res/commodore_up_smash.png")?,
+        ),
+        (
             Sprite::Alchemist,
             texture_creator.load_texture("res/alchemist.png")?,
         ),
@@ -101,6 +133,10 @@ fn main_loop() -> Result<(), String> {
         (
             Sprite::Ground,
             texture_creator.load_texture("res/ground.png")?,
+        ),
+        (
+            Sprite::Placeholder,
+            texture_creator.load_texture("res/commodore.png")?,
         ),
     ]);
     let mut tilt_change = 0;
@@ -125,6 +161,7 @@ fn main_loop() -> Result<(), String> {
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
+            current_class: player_class.clone(),
             name: player_name.to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -157,6 +194,7 @@ fn main_loop() -> Result<(), String> {
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
+            current_class: player_class.clone(),
             name: "obstacle".to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -274,6 +312,7 @@ fn main_loop() -> Result<(), String> {
         if delta.as_millis() / 10 != 0 {
             //   println!("FPS: {}", 100 / (delta.as_millis()/10));
         }
+
         hit_change += delta.as_millis() as f32;
         for event in event_pump.poll_iter() {
             match event {
@@ -289,7 +328,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::W),
                     ..
                 } => {
-                    if !w {
+                    if !w  && entities.lock().unwrap().get_mut(&player_id).unwrap().next_step.1 == 0.0{
                         tilting = true;
 
                         do_not_move = false;
@@ -300,11 +339,13 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
-                    if !a {
+                    if !a && entities.lock().unwrap().get_mut(&player_id).unwrap().next_step.1 == 0.0  {
                         tilting = true;
                         do_not_move = false;
                     }
                     a = true;
+
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::S),
@@ -328,11 +369,13 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
-                    if !d {
+                    if !d && entities.lock().unwrap().get_mut(&player_id).unwrap().next_step.1 == 0.0{
                         tilting = true;
                         do_not_move = false;
                     }
                     d = true;
+
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
                 }
 
                 // WASD
@@ -406,18 +449,17 @@ fn main_loop() -> Result<(), String> {
                 };
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
 
-                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, acc_ratio);
-                entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -=
+                    dx.lerp(60.0, acc_ratio);
             }
             if d && !smashing && !do_not_move {
-
                 let acc_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying {
                     true => 0.2,
                     false => 0.5,
                 };
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
-                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, acc_ratio);
-                entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -=
+                    dx.lerp(-60.0, acc_ratio);
             }
         }
         if tilting {
@@ -465,10 +507,10 @@ fn main_loop() -> Result<(), String> {
                 j_released = false;
             }
             if w && hit_change
-                > Action::action(player_class.clone(), ActionType::Uair, smash_change).hit_time
+                > Action::action(player_class.clone(), ActionType::UpSmash, smash_change).hit_time
                 && smashing
             {
-                let mut hit_type = ActionType::Uair;
+                let mut hit_type = ActionType::UpSmash;
                 hit_type = ActionType::UpSmash;
                 smashing = false;
                 do_not_move = true;
@@ -479,7 +521,7 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(player_class.clone(), ActionType::Uair, smash_change),
+                        Action::action(player_class.clone(), ActionType::UpSmash, smash_change),
                     );
                 hit_change = 0.0;
                 w_released = false;
@@ -539,11 +581,15 @@ fn main_loop() -> Result<(), String> {
                     );
                 hit_change = 0.0;
             }
-            if (a || d)
-                && hit_change > Action::action(player_class.clone(), ActionType::Slide, 1).hit_time
-            {
-                let mut hit_type = ActionType::Slide;
 
+            let mut hit_type = ActionType::Slide;
+            if entities.lock().unwrap().get_mut(&player_id).unwrap().next_step.1 != 0.0{
+                hit_type = ActionType::Sair;
+            }
+            if (a || d)
+
+                && hit_change > Action::action(player_class.clone(), hit_type.clone(), 1).hit_time
+            {
                 entities
                     .lock()
                     .unwrap()
@@ -627,6 +673,27 @@ fn main_loop() -> Result<(), String> {
         /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
             e.execute_movement();
         }*/
+        let p_class = entities
+            .lock()
+            .unwrap()
+            .get(&player_id)
+            .unwrap()
+            .current_class
+            .clone();
+        let p_action = entities
+            .lock()
+            .unwrap()
+            .get(&player_id)
+            .unwrap()
+            .current_action
+            .action
+            .clone();
+        entities
+            .lock()
+            .unwrap()
+            .get_mut(&player_id)
+            .unwrap()
+            .current_sprite = get_animations(p_class, p_action);
         // draw bg
         let texture = &sprites.get(&Sprite::Basement).unwrap();
         canvas.copy(
@@ -666,7 +733,7 @@ fn main_loop() -> Result<(), String> {
         }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             let texture = &sprites.get(&e.current_sprite).unwrap();
-            canvas.copy(
+            canvas.copy_ex(
                 texture,
                 Rect::new(0, 0, texture.query().width, texture.query().height),
                 Rect::new(
@@ -675,6 +742,10 @@ fn main_loop() -> Result<(), String> {
                     texture.query().width * SCALE as u32,
                     texture.query().height * SCALE as u32,
                 ),
+                0.0,
+                Point::new((e.x * SCALE) as i32, (e.y * SCALE) as i32),
+                !e.dir,
+                false,
             )?;
             if SHOW_HITBOXES {
                 for hitbox in &e.hitboxes {
@@ -695,7 +766,7 @@ fn main_loop() -> Result<(), String> {
             }
 
             let texture = &sprites.get(&e.current_sprite).unwrap();
-            canvas.copy(
+            canvas.copy_ex(
                 texture,
                 Rect::new(0, 0, texture.query().width, texture.query().height),
                 Rect::new(
@@ -704,6 +775,10 @@ fn main_loop() -> Result<(), String> {
                     texture.query().width * SCALE as u32,
                     texture.query().height * SCALE as u32,
                 ),
+                0.0,
+                Point::new((e.x * SCALE) as i32, (e.y * SCALE) as i32),
+                !e.dir,
+                false,
             )?;
             if SHOW_HITBOXES {
                 for hitbox in &e.hitboxes {
@@ -719,7 +794,12 @@ fn main_loop() -> Result<(), String> {
         }
         for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
             let hp_percentage_visual = e.1.hp as f32 / 200.0;
-            let percentage_color = Color::RGBA(STATUS_percentage_color.r,(STATUS_percentage_color.g as f32).lerp(0.0,hp_percentage_visual) as u8,(STATUS_percentage_color.b as f32).lerp(0.0,hp_percentage_visual) as u8,STATUS_percentage_color.a);
+            let percentage_color = Color::RGBA(
+                STATUS_percentage_color.r,
+                (STATUS_percentage_color.g as f32).lerp(0.0, hp_percentage_visual) as u8,
+                (STATUS_percentage_color.b as f32).lerp(0.0, hp_percentage_visual) as u8,
+                STATUS_percentage_color.a,
+            );
             if e.1.name.is_empty() {
                 continue;
             }
@@ -765,7 +845,13 @@ fn main_loop() -> Result<(), String> {
             );
         }
         for (i, e) in entities.lock().unwrap().iter().enumerate() {
-            let percentage_color = Color::RGBA(STATUS_percentage_color.r,STATUS_percentage_color.g,STATUS_percentage_color.b,STATUS_percentage_color.a);
+            let hp_percentage_visual = e.1.hp as f32 / 200.0;
+            let percentage_color = Color::RGBA(
+                STATUS_percentage_color.r,
+                (STATUS_percentage_color.g as f32).lerp(0.0, hp_percentage_visual) as u8,
+                (STATUS_percentage_color.b as f32).lerp(0.0, hp_percentage_visual) as u8,
+                STATUS_percentage_color.a,
+            );
             let name_text = get_text(
                 e.1.name.clone(),
                 STATUS_percentage_color,

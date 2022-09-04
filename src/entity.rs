@@ -11,9 +11,11 @@ pub enum ActionType {
     Nair,
     Dair,
     Uair,
+    Sair,
     Slide,
     SideSmash,
     UpSmash,
+    Idle,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ClassType {
@@ -64,6 +66,7 @@ pub struct Entity {
     pub hitboxes: Vec<HitBox>,
     pub move_lock: bool,
     pub current_action: Action,
+    pub current_class: ClassType,
     pub name: String,
     pub inv_time: f32,
     pub inv_change: f32,
@@ -118,8 +121,8 @@ impl Action {
             ActionType::Jab => Action {
                 w: 12.0,
                 h: 12.0,
-                x: 2.0,
-                y: 4.0,
+                x: -12.0,
+                y: 8.0,
                 knock_x: 10.0 * hit_ratio,
                 knock_y: 10.0 * hit_ratio,
                 damage: 10.0,
@@ -145,8 +148,8 @@ impl Action {
             ActionType::Nair => Action {
                 w: 12.0,
                 h: 12.0,
-                x: -8.0,
-                y: 4.0,
+                x: -16.0,
+                y: 8.0,
                 knock_x: 20.0 * hit_ratio,
                 knock_y: 20.0 * hit_ratio,
                 damage: 20.0 * hit_ratio,
@@ -158,8 +161,8 @@ impl Action {
             ActionType::Uair => Action {
                 w: 12.0,
                 h: 12.0,
-                x: -8.0,
-                y: -8.0,
+                x: -16.0,
+                y: -4.0,
                 knock_x: 25.0 * hit_ratio,
                 knock_y: 25.0 * hit_ratio,
                 damage: 25.0 * hit_ratio,
@@ -171,8 +174,21 @@ impl Action {
             ActionType::Dair => Action {
                 w: 12.0,
                 h: 12.0,
+                x: -16.0,
+                y: 16.0,
+                knock_x: 25.0 * hit_ratio,
+                knock_y: 25.0 * hit_ratio,
+                damage: 25.0 * hit_ratio,
+                hit_time: 1000.0,
+                duration: 750.0,
+                action: action,
+                class: class,
+            },
+            ActionType::Sair => Action {
+                w: 12.0,
+                h: 12.0,
                 x: -8.0,
-                y: 14.0,
+                y: 4.0,
                 knock_x: 25.0 * hit_ratio,
                 knock_y: 25.0 * hit_ratio,
                 damage: 25.0 * hit_ratio,
@@ -184,8 +200,8 @@ impl Action {
             ActionType::SideSmash => Action {
                 w: 12.0,
                 h: 12.0,
-                x: 2.0,
-                y: 4.0,
+                x: -12.0,
+                y: 8.0,
                 knock_x: 30.0 * hit_ratio,
                 knock_y: 30.0 * hit_ratio,
                 damage: 40.0 * hit_ratio,
@@ -197,11 +213,24 @@ impl Action {
             ActionType::UpSmash => Action {
                 w: 12.0,
                 h: 12.0,
-                x: -8.0,
-                y: -8.0,
+                x: -16.0,
+                y: -4.0,
                 knock_x: 40.0 * hit_ratio,
                 knock_y: 40.0 * hit_ratio,
                 damage: 40.0 * hit_ratio,
+                hit_time: 1000.0,
+                duration: 750.0,
+                action: action,
+                class: class,
+            },
+            ActionType::Idle => Action {
+                w: 0.0,
+                h: 0.0,
+                x: 0.0,
+                y: 0.0,
+                knock_x: 0.0 * hit_ratio,
+                knock_y: 0.0 * hit_ratio,
+                damage: 0.0 * hit_ratio,
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
@@ -240,6 +269,9 @@ impl Entity {
             }
         }
         self.hitboxes.retain(|h| h.active);
+        if self.hitboxes.len() == 0 {
+            self.current_action.action = ActionType::Idle;
+        }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
         self.current_action = action.clone();
