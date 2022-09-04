@@ -15,6 +15,7 @@ pub struct NetworkBare {
     pub active: bool,
     pub dir: bool,
     pub action: ActionType,
+    pub class: ClassType,
 }
 pub trait AsNetworkBare {
     fn get_as_network_bare(&self) -> NetworkBare;

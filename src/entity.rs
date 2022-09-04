@@ -15,8 +15,10 @@ pub enum ActionType {
     SideSmash,
     UpSmash,
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ClassType {
-    Ant,
+    Commodore,
+    Alchemist,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -41,6 +43,7 @@ impl AsNetworkBare for HitBox {
             h: self.h as i32,
             dir: self.dir,
             action: self.action.action.clone(),
+            class: self.action.class.clone(),
             active: self.active,
         }
     }
@@ -101,6 +104,7 @@ pub struct Action {
     pub hit_time: f32,
     pub duration: f32,
     pub action: ActionType,
+    pub class: ClassType,
 }
 impl Action {
     pub fn action(class: ClassType, action: ActionType, smash_change: u128) -> Action {
@@ -121,6 +125,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 100.0,
                 action: action,
+                class: class,
             },
 
             ActionType::Slide => Action {
@@ -134,6 +139,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
+                class: class,
             },
             ActionType::Nair => Action {
                 w: 12.0,
@@ -146,6 +152,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
+                class: class,
             },
             ActionType::Uair => Action {
                 w: 12.0,
@@ -158,6 +165,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
+                class: class,
             },
             ActionType::Dair => Action {
                 w: 12.0,
@@ -170,6 +178,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
+                class: class,
             },
             ActionType::SideSmash => Action {
                 w: 12.0,
@@ -182,6 +191,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 100.0,
                 action: action,
+                class: class,
             },
             ActionType::UpSmash => Action {
                 w: 12.0,
@@ -194,6 +204,7 @@ impl Action {
                 hit_time: 1000.0,
                 duration: 750.0,
                 action: action,
+                class: class,
             },
         }
     }
@@ -258,7 +269,7 @@ impl Entity {
         if self.inv_change < self.inv_time {
             return;
         }
-        let hitbox_action = Action::action(ClassType::Ant, hitbox.action.clone(), 1);
+        let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
         let hit_multiplier = 1.0 + self.hp as f32 / 100.0;
         let hit_multiplier_knock = 3.0 + self.hp as f32 / 50.0;
         if hitbox.dir {

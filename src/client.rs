@@ -42,6 +42,26 @@ const STATUS_FONT_SIZE: u16 = 200;
 
 fn main_loop() -> Result<(), String> {
     let mut ip: &str = "127.0.0.1:8888";
+
+    let mut rng = rand::thread_rng();
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 4 {
+        println!("Provide arguments (username, character, ip)");
+        exit(0);
+    }
+    let player_id = rng.gen();
+    let player_name = &args[1];
+    let player_class = match args[2].as_str(){
+        "commodore" => ClassType::Commodore,
+        "alchemist" => ClassType::Alchemist,
+        _ => ClassType::Commodore,
+
+    };
+    let player_sprite = match player_class {
+        ClassType::Commodore => Sprite::Commodore,
+        ClassType::Alchemist => Sprite::Alchemist,
+    };
+    ip = &args[3];
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let window = video_subsystem
@@ -70,7 +90,7 @@ fn main_loop() -> Result<(), String> {
 
         (
             Sprite::Commodore,
-            texture_creator.load_texture("res/alchemist.png")?,
+            texture_creator.load_texture("res/commodore.png")?,
         ),
         (
             Sprite::Alchemist,
@@ -85,19 +105,10 @@ fn main_loop() -> Result<(), String> {
             texture_creator.load_texture("res/ground.png")?,
         ),
     ]);
-    let mut rng = rand::thread_rng();
     let mut tilt_change = 0;
     let mut tilt_time = 132;
     let mut tilting = false;
     let mut smashing = false;
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        println!("Provide arguments (username, ip)");
-        exit(0);
-    }
-    let player_id = rng.gen();
-    let player_name = &args[1];
-    ip = &args[2];
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
         player_id,
         Entity {
@@ -111,10 +122,10 @@ fn main_loop() -> Result<(), String> {
             hp: 0,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
-            current_sprite: Sprite::Commodore,
+            current_sprite: player_sprite.clone(),
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::action(ClassType::Ant, ActionType::Jab, 1),
+            current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
             name: player_name.to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -145,7 +156,7 @@ fn main_loop() -> Result<(), String> {
             current_sprite: Sprite::Ground,
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::action(ClassType::Ant, ActionType::Jab, 1),
+            current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
             name: "obstacle".to_string(),
             inv_change: 0.0,
             inv_time: 1000.0,
@@ -420,7 +431,7 @@ fn main_loop() -> Result<(), String> {
             entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(0.0, 0.87);
         }
         if j_released {
-            if (a || d) && hit_change > Action::action(ClassType::Ant, ActionType::Slide, smash_change).hit_time && smashing{
+            if (a || d) && hit_change > Action::action(player_class.clone(), ActionType::Slide, smash_change).hit_time && smashing{
 
                     let hit_type = ActionType::SideSmash;
                     smashing = false;
@@ -431,11 +442,11 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, smash_change));
+                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, smash_change));
                 hit_change = 0.0;
                 j_released = false;
             }
-            if w && hit_change > Action::action(ClassType::Ant, ActionType::Uair, smash_change).hit_time && smashing {
+            if w && hit_change > Action::action(player_class.clone(), ActionType::Uair, smash_change).hit_time && smashing {
                 let mut hit_type = ActionType::Uair;
                     hit_type = ActionType::UpSmash;
                     smashing = false;
@@ -447,7 +458,7 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(ClassType::Ant, ActionType::Uair, smash_change),
+                        Action::action(player_class.clone(), ActionType::Uair, smash_change),
                     );
                 hit_change = 0.0;
                 w_released = false;
@@ -468,7 +479,7 @@ fn main_loop() -> Result<(), String> {
                     .next_step
                     .1
                     == 0.0
-                && hit_change > Action::action(ClassType::Ant, ActionType::Jab, 1).hit_time
+                && hit_change > Action::action(player_class.clone(), ActionType::Jab, 1).hit_time
             {
                 let mut hit_type = ActionType::Jab;
                 entities
@@ -476,7 +487,7 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, 1));
+                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, 1));
                 hit_change = 0.0;
             }
             if !a
@@ -491,7 +502,7 @@ fn main_loop() -> Result<(), String> {
                     .next_step
                     .1
                     != 0.0
-                && hit_change > Action::action(ClassType::Ant, ActionType::Nair, 1).hit_time
+                && hit_change > Action::action(player_class.clone(), ActionType::Nair, 1).hit_time
             {
                 entities
                     .lock()
@@ -500,11 +511,11 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(ClassType::Ant, ActionType::Nair, 1),
+                        Action::action(player_class.clone(), ActionType::Nair, 1),
                     );
                 hit_change = 0.0;
             }
-            if (a || d) && hit_change > Action::action(ClassType::Ant, ActionType::Slide, 1).hit_time {
+            if (a || d) && hit_change > Action::action(player_class.clone(), ActionType::Slide, 1).hit_time {
                 let mut hit_type = ActionType::Slide;
 
                 entities
@@ -512,10 +523,10 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, 1));
+                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, 1));
                 hit_change = 0.0;
             }
-            if w && hit_change > Action::action(ClassType::Ant, ActionType::Uair, 1).hit_time {
+            if w && hit_change > Action::action(player_class.clone(), ActionType::Uair, 1).hit_time {
                 let mut hit_type = ActionType::Uair;
                 entities
                     .lock()
@@ -524,7 +535,7 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(ClassType::Ant, ActionType::Uair, 1),
+                        Action::action(player_class.clone(), ActionType::Uair, 1),
                     );
                 hit_change = 0.0;
                 w_released = false;
@@ -537,7 +548,7 @@ fn main_loop() -> Result<(), String> {
                 .next_step
                 .1
                 > 0.0
-                && hit_change > Action::action(ClassType::Ant, ActionType::Dair, 1).hit_time
+                && hit_change > Action::action(player_class.clone(), ActionType::Dair, 1).hit_time
             {
                 let mut hit_type = ActionType::Dair;
                 entities
@@ -545,7 +556,7 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(ClassType::Ant, hit_type, 1));
+                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, 1));
                 hit_change = 0.0;
             }
 
@@ -604,6 +615,23 @@ fn main_loop() -> Result<(), String> {
             e.w = texture.query().width as f32;
             e.h = texture.query().height as f32;
         }
+
+        for e in environment.values_mut() {
+            let texture = &sprites.get(&e.current_sprite).unwrap();
+
+            e.w = texture.query().width as f32;
+            e.h = texture.query().height as f32;
+            canvas.copy(
+                texture,
+                Rect::new(0, 0, texture.query().width, texture.query().height),
+                Rect::new(
+                    (e.x * SCALE as f32) as i32,
+                    (e.y * SCALE as f32) as i32 - (2.0 * SCALE) as i32,
+                    texture.query().width * SCALE as u32,
+                    texture.query().height * SCALE as u32,
+                ),
+            )?;
+        }
         for (id, e) in entities.lock().unwrap().iter_mut() {
             let texture = &sprites.get(&e.current_sprite).unwrap();
             canvas.copy(
@@ -628,6 +656,7 @@ fn main_loop() -> Result<(), String> {
                 }
             }
         }
+
         for (id, e) in network_entities.lock().unwrap().iter_mut() {
             if !&sprites.contains_key(&e.current_sprite) {
                 continue;
@@ -655,22 +684,6 @@ fn main_loop() -> Result<(), String> {
                     ));
                 }
             }
-        }
-        for e in environment.values_mut() {
-            let texture = &sprites.get(&e.current_sprite).unwrap();
-
-            e.w = texture.query().width as f32;
-            e.h = texture.query().height as f32;
-            canvas.copy(
-                texture,
-                Rect::new(0, 0, texture.query().width, texture.query().height),
-                Rect::new(
-                    (e.x * SCALE as f32) as i32,
-                    (e.y * SCALE as f32) as i32,
-                    texture.query().width * SCALE as u32,
-                    texture.query().height * SCALE as u32,
-                ),
-            )?;
         }
         for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
             if e.1.name.is_empty() {
