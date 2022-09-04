@@ -51,11 +51,10 @@ fn main_loop() -> Result<(), String> {
     }
     let player_id = rng.gen();
     let player_name = &args[1];
-    let player_class = match args[2].as_str(){
+    let player_class = match args[2].as_str() {
         "commodore" => ClassType::Commodore,
         "alchemist" => ClassType::Alchemist,
         _ => ClassType::Commodore,
-
     };
     let player_sprite = match player_class {
         ClassType::Commodore => Sprite::Commodore,
@@ -87,7 +86,6 @@ fn main_loop() -> Result<(), String> {
     let player_color = Color::RGB(128, 128, 0);
     let mut hit_change = 0.0;
     let sprites = HashMap::from([
-
         (
             Sprite::Commodore,
             texture_creator.load_texture("res/commodore.png")?,
@@ -120,6 +118,7 @@ fn main_loop() -> Result<(), String> {
             dy: 0.0,
             dir: true,
             hp: 0,
+            flying: false,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
             current_sprite: player_sprite.clone(),
@@ -151,6 +150,7 @@ fn main_loop() -> Result<(), String> {
             dy: 0.0,
             dir: true,
             hp: 0,
+            flying: false,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
             current_sprite: Sprite::Ground,
@@ -386,8 +386,7 @@ fn main_loop() -> Result<(), String> {
         }
         if smashing {
             smash_change += delta.as_millis();
-        }
-        else {
+        } else {
             smash_change = 1;
         }
         canvas.set_draw_color(bg_color);
@@ -401,14 +400,23 @@ fn main_loop() -> Result<(), String> {
             .move_lock
         {
             if a && !smashing && !do_not_move {
+                let acc_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying {
+                    true => 0.2,
+                    false => 0.5,
+                };
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
 
-                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, 0.5);
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(60.0, acc_ratio);
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
             }
             if d && !smashing && !do_not_move {
+
+                let acc_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying {
+                    true => 0.2,
+                    false => 0.5,
+                };
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
-                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, 0.5);
+                entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(-60.0, acc_ratio);
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
             }
         }
@@ -426,31 +434,44 @@ fn main_loop() -> Result<(), String> {
             .unwrap()
             .next_step
             .1;
-        if !a && !d && next_step_y == 0.0 || smashing{
+        if !a && !d && next_step_y == 0.0 || smashing {
+            let slow_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying {
+                true => 0.87,
+                false => 0.87,
+            };
             let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
-            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(0.0, 0.87);
+            entities.lock().unwrap().get_mut(&player_id).unwrap().dx -= dx.lerp(0.0, slow_ratio);
         }
         if j_released {
-            if (a || d) && hit_change > Action::action(player_class.clone(), ActionType::Slide, smash_change).hit_time && smashing{
-
-                    let hit_type = ActionType::SideSmash;
-                    smashing = false;
-                    do_not_move = true;
+            if (a || d)
+                && hit_change
+                    > Action::action(player_class.clone(), ActionType::Slide, smash_change).hit_time
+                && smashing
+            {
+                let hit_type = ActionType::SideSmash;
+                smashing = false;
+                do_not_move = true;
 
                 entities
                     .lock()
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, smash_change));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(player_class.clone(), hit_type, smash_change),
+                    );
                 hit_change = 0.0;
                 j_released = false;
             }
-            if w && hit_change > Action::action(player_class.clone(), ActionType::Uair, smash_change).hit_time && smashing {
+            if w && hit_change
+                > Action::action(player_class.clone(), ActionType::Uair, smash_change).hit_time
+                && smashing
+            {
                 let mut hit_type = ActionType::Uair;
-                    hit_type = ActionType::UpSmash;
-                    smashing = false;
-                    do_not_move = true;
+                hit_type = ActionType::UpSmash;
+                smashing = false;
+                do_not_move = true;
                 entities
                     .lock()
                     .unwrap()
@@ -464,9 +485,9 @@ fn main_loop() -> Result<(), String> {
                 w_released = false;
                 j_released = false;
             }
-                j_released = false;
+            j_released = false;
         }
-        if j && !smashing{
+        if j && !smashing {
             if !a
                 && !d
                 && !w
@@ -487,7 +508,10 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, 1));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(player_class.clone(), hit_type, 1),
+                    );
                 hit_change = 0.0;
             }
             if !a
@@ -515,7 +539,9 @@ fn main_loop() -> Result<(), String> {
                     );
                 hit_change = 0.0;
             }
-            if (a || d) && hit_change > Action::action(player_class.clone(), ActionType::Slide, 1).hit_time {
+            if (a || d)
+                && hit_change > Action::action(player_class.clone(), ActionType::Slide, 1).hit_time
+            {
                 let mut hit_type = ActionType::Slide;
 
                 entities
@@ -523,10 +549,14 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, 1));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(player_class.clone(), hit_type, 1),
+                    );
                 hit_change = 0.0;
             }
-            if w && hit_change > Action::action(player_class.clone(), ActionType::Uair, 1).hit_time {
+            if w && hit_change > Action::action(player_class.clone(), ActionType::Uair, 1).hit_time
+            {
                 let mut hit_type = ActionType::Uair;
                 entities
                     .lock()
@@ -556,10 +586,12 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .get_mut(&player_id)
                     .unwrap()
-                    .execute_action(delta.as_millis(), Action::action(player_class.clone(), hit_type, 1));
+                    .execute_action(
+                        delta.as_millis(),
+                        Action::action(player_class.clone(), hit_type, 1),
+                    );
                 hit_change = 0.0;
             }
-
         }
         if !a && !d && !w {
             smashing = false;
@@ -595,7 +627,7 @@ fn main_loop() -> Result<(), String> {
         /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
             e.execute_movement();
         }*/
-        // draw bg 
+        // draw bg
         let texture = &sprites.get(&Sprite::Basement).unwrap();
         canvas.copy(
             texture,

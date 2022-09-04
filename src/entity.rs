@@ -67,6 +67,7 @@ pub struct Entity {
     pub name: String,
     pub inv_time: f32,
     pub inv_change: f32,
+    pub flying: bool,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -285,6 +286,7 @@ impl Entity {
 
         self.inv_change = 0.0;
         self.calculate_step(delta);
+        self.flying = true;
     }
     pub fn execute_movement(&mut self) {
         self.move_to(self.next_step)
@@ -315,6 +317,7 @@ impl Entity {
             self.collide_directions.2 = true;
             self.dy = 0.0;
             self.y = other.y - self.h;
+            self.flying = false;
         }
 
         if self.x + self.next_step.0 < other.x + other.w
@@ -326,6 +329,8 @@ impl Entity {
             self.collide_directions.3 = true;
             self.collide_directions.1 = true;
             self.dx = 0.0;
+
+            self.flying = false;
         }
     }
     pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
