@@ -476,7 +476,7 @@ fn main_loop() -> Result<(), String> {
         {
             if a && !smashing && !do_not_move {
                 let acc_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying {
-                    true => 0.2,
+                    true => 0.1,
                     false => 0.5,
                 };
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
@@ -486,7 +486,7 @@ fn main_loop() -> Result<(), String> {
             }
             if d && !smashing && !do_not_move {
                 let acc_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying {
-                    true => 0.2,
+                    true => 0.1,
                     false => 0.5,
                 };
                 let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
