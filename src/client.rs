@@ -88,55 +88,87 @@ fn main_loop() -> Result<(), String> {
     let sprites = HashMap::from([
         (
             Sprite::Commodore,
-            texture_creator.load_texture("res/commodore.png")?,
+            texture_creator.load_texture("res/commodore.png").unwrap(),
         ),
         (
             Sprite::CommodoreJab,
-            texture_creator.load_texture("res/commodore_jab.png")?,
+            texture_creator.load_texture("res/commodore_jab.png").unwrap(),
         ),
         (
             Sprite::CommodoreNair,
-            texture_creator.load_texture("res/commodore_nair.png")?,
+            texture_creator.load_texture("res/commodore_nair.png").unwrap(),
         ),
         (
             Sprite::CommodoreDair,
-            texture_creator.load_texture("res/commodore_dair.png")?,
+            texture_creator.load_texture("res/commodore_dair.png").unwrap(),
         ),
         (
             Sprite::CommodoreUair,
-            texture_creator.load_texture("res/commodore_uair.png")?,
+            texture_creator.load_texture("res/commodore_uair.png").unwrap(),
         ),
         (
             Sprite::CommodoreSair,
-            texture_creator.load_texture("res/commodore_sair.png")?,
+            texture_creator.load_texture("res/commodore_sair.png").unwrap(),
         ),
         (
             Sprite::CommodoreSlide,
-            texture_creator.load_texture("res/commodore_slide.png")?,
+            texture_creator.load_texture("res/commodore_slide.png").unwrap(),
         ),
         (
             Sprite::CommodoreSideSmash,
-            texture_creator.load_texture("res/commodore_side_smash.png")?,
+            texture_creator.load_texture("res/commodore_side_smash.png").unwrap(),
         ),
         (
             Sprite::CommodoreUpSmash,
-            texture_creator.load_texture("res/commodore_up_smash.png")?,
+            texture_creator.load_texture("res/commodore_up_smash.png").unwrap(),
         ),
         (
             Sprite::Alchemist,
-            texture_creator.load_texture("res/alchemist.png")?,
+            texture_creator.load_texture("res/alchemist.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistJab,
+            texture_creator.load_texture("res/alchemist_jab.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistNair,
+            texture_creator.load_texture("res/alchemist_nair.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistDair,
+            texture_creator.load_texture("res/alchemist_dair.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistUair,
+            texture_creator.load_texture("res/alchemist_uair.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistSair,
+            texture_creator.load_texture("res/alchemist_sair.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistSlide,
+            texture_creator.load_texture("res/alchemist_slide.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistSideSmash,
+            texture_creator.load_texture("res/alchemist_side_smash.png").unwrap(),
+        ),
+        (
+            Sprite::AlchemistUpSmash,
+            texture_creator.load_texture("res/alchemist_up_smash.png").unwrap(),
         ),
         (
             Sprite::Basement,
-            texture_creator.load_texture("res/basement_bg.png")?,
+            texture_creator.load_texture("res/basement_bg.png").unwrap(),
         ),
         (
             Sprite::Ground,
-            texture_creator.load_texture("res/ground.png")?,
+            texture_creator.load_texture("res/ground.png").unwrap(),
         ),
         (
             Sprite::Placeholder,
-            texture_creator.load_texture("res/commodore.png")?,
+            texture_creator.load_texture("res/commodore.png").unwrap(),
         ),
     ]);
     let mut tilt_change = 0;

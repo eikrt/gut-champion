@@ -15,6 +15,14 @@ use std::collections::HashMap;
 pub enum Sprite {
     Ground,
     Alchemist,
+    AlchemistJab,
+    AlchemistNair,
+    AlchemistUair,
+    AlchemistDair,
+    AlchemistSair,
+    AlchemistSlide,
+    AlchemistSideSmash,
+    AlchemistUpSmash,
     Commodore,
     CommodoreJab,
     CommodoreNair,
@@ -41,15 +49,15 @@ pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
             ActionType::Idle => Sprite::Commodore,
         },
         ClassType::Alchemist => match action {
-            ActionType::Jab => Sprite::CommodoreJab,
-            ActionType::Nair => Sprite::CommodoreNair,
-            ActionType::Dair => Sprite::CommodoreDair,
-            ActionType::Uair => Sprite::CommodoreUair,
-            ActionType::Sair => Sprite::CommodoreSair,
-            ActionType::Slide => Sprite::CommodoreSlide,
-            ActionType::SideSmash => Sprite::CommodoreSideSmash,
-            ActionType::UpSmash => Sprite::CommodoreUpSmash,
-            ActionType::Idle => Sprite::Commodore,
+            ActionType::Jab => Sprite::AlchemistJab,
+            ActionType::Nair => Sprite::AlchemistNair,
+            ActionType::Dair => Sprite::AlchemistDair,
+            ActionType::Uair => Sprite::AlchemistUair,
+            ActionType::Sair => Sprite::AlchemistSair,
+            ActionType::Slide => Sprite::AlchemistSlide,
+            ActionType::SideSmash => Sprite::AlchemistSideSmash,
+            ActionType::UpSmash => Sprite::AlchemistUpSmash,
+            ActionType::Idle => Sprite::Alchemist,
         },
     }
 }
@@ -78,11 +86,11 @@ pub fn get_text<'a, T>(
         .render(&message)
         .blended(color)
         .map_err(|e| e.to_string())
-        .ok()?;
+        .ok().unwrap();
     let text_texture = texture_creator
         .create_texture_from_surface(&text_surface)
         .map_err(|e| e.to_string())
-        .ok()?;
+        .ok().unwrap();
     let text_sprite = Rect::new(
         0,
         0,
