@@ -488,10 +488,7 @@ impl Entity {
     }
     pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
         for hitbox in &other.hitboxes {
-            if self.x + self.w / 2.0 + self.next_step.0 > hitbox.x as f32
-                && self.x + self.w / 2.0 + self.next_step.0 < (hitbox.x + hitbox.w) as f32
-                && self.y + self.h / 2.0 + self.next_step.1 > hitbox.y as f32
-                && self.y + self.h / 2.0 + self.next_step.1 < (hitbox.y + hitbox.h) as f32
+            if self.x < hitbox.x as f32 + hitbox.w as f32 && self.x + self.w > hitbox.x as f32 && self.y < hitbox.y as f32+ hitbox.h as f32 && self.y + self.h > hitbox.y as f32
             {
                 self.take_hit(delta, &hitbox);
             }
