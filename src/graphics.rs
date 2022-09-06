@@ -33,6 +33,9 @@ pub enum Sprite {
     CommodoreSideSmash,
     CommodoreUpSmash,
     Basement,
+    LongButtonMain,
+    LongButtonHovered,
+    LongButtonPressed,
     Placeholder,
 }
 pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {

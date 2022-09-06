@@ -71,6 +71,7 @@ pub struct Entity {
     pub inv_time: f32,
     pub inv_change: f32,
     pub flying: bool,
+    pub jump_counter: u8,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -190,7 +191,7 @@ impl Action {
                     x: -8.0,
                     y: 4.0,
                     knock_x: 25.0 * hit_ratio,
-                    knock_y: 5.0 * hit_ratio,
+                    knock_y: 15.0 * hit_ratio,
                     damage: 25.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 750.0,
@@ -203,7 +204,7 @@ impl Action {
                     x: -12.0,
                     y: 8.0,
                     knock_x: 30.0 * hit_ratio,
-                    knock_y: 5.0 * hit_ratio,
+                    knock_y: 15.0 * hit_ratio,
                     damage: 40.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 100.0,
@@ -310,7 +311,7 @@ impl Action {
                     x: -8.0,
                     y: 4.0,
                     knock_x: 25.0 * hit_ratio,
-                    knock_y: 5.0 * hit_ratio,
+                    knock_y: 15.0 * hit_ratio,
                     damage: 45.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 750.0,
@@ -323,7 +324,7 @@ impl Action {
                     x: -12.0,
                     y: 8.0,
                     knock_x: 30.0 * hit_ratio,
-                    knock_y: 10.0 * hit_ratio,
+                    knock_y: 20.0 * hit_ratio,
                     damage: 40.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 100.0,
@@ -393,6 +394,9 @@ impl Entity {
         if self.hitboxes.len() == 0 {
             self.current_action.action = ActionType::Idle;
         }
+        if self.next_step.1 == 0.0 {
+            self.jump_counter = 0;
+        }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
         self.current_action = action.clone();
@@ -446,8 +450,16 @@ impl Entity {
     }
     pub fn jump(&mut self) {
         if self.next_step.1 == 0.0 {
-            self.dy -= JUMP_STRENGTH;
+            
+            self.jump_counter = 0;
         }
+        if self.jump_counter > 1 {
+            return;
+        }
+            
+            self.dy = -JUMP_STRENGTH;
+
+        self.jump_counter += 1;
     }
     pub fn calculate_step(&mut self, delta: u128) {
         self.next_step.0 = (self.dx * delta as f32) as f32 / 1000.0;
