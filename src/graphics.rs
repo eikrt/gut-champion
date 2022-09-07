@@ -84,7 +84,6 @@ impl Camera {
         let angle = (target_y - s_y).atan2(target_x-s_x); 
        // let angle = target_y.atan2(self.y) - target_x.atan2(self.x);
         let dist = ((target_y - s_y).powf(2.0) + (target_x - s_x).powf(2.0)).sqrt(); 
-        println!("{}", dist);
         if dist < 8.0 {
             self.dx = self.dx.lerp(0.0,0.3);
             self.dy = self.dy.lerp(0.0,0.3);

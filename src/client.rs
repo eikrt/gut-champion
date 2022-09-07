@@ -39,7 +39,7 @@ const RESOLUTION_X: u32 = 256;
 const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
-const SHOW_HITBOXES: bool = true;
+const SHOW_HITBOXES: bool = false;
 const MSG_SIZE: usize = 96;
 const STATUS_FONT_SIZE: u16 = 200;
 const STATUS_percentage_color: Color = Color::RGBA(255, 255, 195, 255);
@@ -1162,8 +1162,8 @@ fn main_loop() -> Result<(), String> {
                     texture,
                     Rect::new(0, 0, texture.query().width, texture.query().height),
                     Rect::new(
-                        ((camera.x + e.x) * SCALE as f32) as i32,
-                        ((camera.y + e.y) * SCALE as f32) as i32,
+                        ((-camera.x + e.x) * SCALE as f32) as i32,
+                        ((-camera.y + e.y) * SCALE as f32) as i32,
                         texture.query().width * SCALE as u32,
                         texture.query().height * SCALE as u32,
                     ),
@@ -1176,8 +1176,8 @@ fn main_loop() -> Result<(), String> {
                     for hitbox in &e.hitboxes {
                         canvas.set_draw_color(Color::RGB(255, 130, 210));
                         canvas.draw_rect(Rect::new(
-                            (hitbox.x as f32 * SCALE) as i32,
-                            (hitbox.y as f32 * SCALE) as i32,
+                            (-camera.x + hitbox.x as f32 * SCALE) as i32,
+                            (-camera.y + hitbox.y as f32 * SCALE) as i32,
                             (hitbox.w as f32 * SCALE) as u32,
                             (hitbox.h as f32 * SCALE) as u32,
                         ));
