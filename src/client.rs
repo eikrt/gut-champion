@@ -35,6 +35,8 @@ use std::{
 };
 use std::{thread, time};
 const SCALE: f32 = 4.0;
+const RESOLUTION_X: u32 = 256;
+const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = true;
@@ -54,6 +56,7 @@ fn client_threads(
     entities_send: Arc<Mutex<HashMap<u64, Entity>>>,
     network_entities_thread: Arc<Mutex<HashMap<u64, NetworkEntity>>>,
 ) {
+    
     let mut time_from_last_packet_compare = SystemTime::now();
     let mut client = TcpStream::connect(ip).expect("Connection failed...");
     client.set_nonblocking(true);
@@ -164,7 +167,12 @@ fn main_loop() -> Result<(), String> {
         .into_canvas()
         .build()
         .expect("could not make a canvas");
-
+    let mut camera = Camera{
+        x: 0.0,
+        y: 0.0,
+        dx: 0.0,
+        dy: 0.0,
+    };
     let _image_context = image::init(InitFlag::PNG | InitFlag::JPG)?;
 
     let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
@@ -1085,7 +1093,7 @@ fn main_loop() -> Result<(), String> {
                 Rect::new(0, 0, texture.query().width, texture.query().height),
                 Rect::new(
                     (0.0 * SCALE as f32) as i32,
-                    (0.0 * SCALE as f32) as i32,
+                    (0.0* SCALE as f32) as i32,
                     texture.query().width * SCALE as u32,
                     texture.query().height * SCALE as u32,
                 ),
@@ -1108,8 +1116,8 @@ fn main_loop() -> Result<(), String> {
                     texture,
                     Rect::new(0, 0, texture.query().width, texture.query().height),
                     Rect::new(
-                        (e.x * SCALE as f32) as i32,
-                        (e.y * SCALE as f32) as i32 - (2.0 * SCALE) as i32,
+                        ((-camera.x + e.x) * SCALE as f32) as i32,
+                        ((-camera.y + e.y) * SCALE as f32) as i32 - (2.0 * SCALE) as i32,
                         texture.query().width * SCALE as u32,
                         texture.query().height * SCALE as u32,
                     ),
@@ -1121,8 +1129,8 @@ fn main_loop() -> Result<(), String> {
                     texture,
                     Rect::new(0, 0, texture.query().width, texture.query().height),
                     Rect::new(
-                        (e.x * SCALE as f32) as i32,
-                        (e.y * SCALE as f32) as i32,
+                        ((-camera.x + e.x) * SCALE as f32) as i32,
+                        ((-camera.y + e.y) * SCALE as f32) as i32,
                         texture.query().width * SCALE as u32,
                         texture.query().height * SCALE as u32,
                     ),
@@ -1135,8 +1143,8 @@ fn main_loop() -> Result<(), String> {
                     for hitbox in &e.hitboxes {
                         canvas.set_draw_color(Color::RGB(255, 130, 210));
                         canvas.draw_rect(Rect::new(
-                            (hitbox.x * SCALE) as i32,
-                            (hitbox.y * SCALE) as i32,
+                            ((-camera.x + hitbox.x) * SCALE) as i32,
+                            ((-camera.y + hitbox.y) * SCALE) as i32,
                             (hitbox.w * SCALE) as u32,
                             (hitbox.h * SCALE) as u32,
                         ));
@@ -1154,8 +1162,8 @@ fn main_loop() -> Result<(), String> {
                     texture,
                     Rect::new(0, 0, texture.query().width, texture.query().height),
                     Rect::new(
-                        (e.x * SCALE as f32) as i32,
-                        (e.y * SCALE as f32) as i32,
+                        ((camera.x + e.x) * SCALE as f32) as i32,
+                        ((camera.y + e.y) * SCALE as f32) as i32,
                         texture.query().width * SCALE as u32,
                         texture.query().height * SCALE as u32,
                     ),
@@ -1288,6 +1296,10 @@ fn main_loop() -> Result<(), String> {
                 entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
                 jump = false;
             }
+            let p_x = entities.lock().unwrap().get_mut(&player_id).unwrap().x;
+            let p_y = entities.lock().unwrap().get_mut(&player_id).unwrap().y;
+            camera.move_towards_point(p_x, p_y);
+            camera.tick(delta.as_millis());
         }
         canvas.present();
         compare_time = SystemTime::now();

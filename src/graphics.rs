@@ -11,6 +11,8 @@ use sdl2::surface::Surface;
 use sdl2::ttf::Font;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use lerp::Lerp;
+const CAMERA_SPEED: f32 = 32.0;
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Sprite {
     Ground,
@@ -66,8 +68,31 @@ pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
 }
 
 pub struct Camera {
-    x: f32,
-    y: f32,
+    pub x: f32,
+    pub y: f32,
+    pub dx: f32,
+    pub dy: f32,
+}
+impl Camera {
+    pub fn tick(&mut self, delta: u128) {
+        self.x += (self.dx * delta as f32) as f32 / 1000.0;
+        self.y += (self.dy * delta as f32) as f32 / 1000.0;
+    }
+    pub fn move_towards_point(&mut self, target_x: f32, target_y: f32){
+        let s_x = self.x + 256.0/2.0 - 8.0;
+        let s_y = self.y + 144.0/2.0 - 16.0;
+        let angle = (target_y - s_y).atan2(target_x-s_x); 
+       // let angle = target_y.atan2(self.y) - target_x.atan2(self.x);
+        let dist = ((target_y - s_y).powf(2.0) + (target_x - s_x).powf(2.0)).sqrt(); 
+        println!("{}", dist);
+        if dist < 8.0 {
+            self.dx = self.dx.lerp(0.0,0.3);
+            self.dy = self.dy.lerp(0.0,0.3);
+            return;
+        }
+        self.dx = (angle.cos() - 0.0*3.14/1.0) * CAMERA_SPEED;
+        self.dy = (angle.sin() - 0.0*3.14/1.0) * CAMERA_SPEED;
+    }
 }
 pub struct Text<'a> {
     pub text_surface: Surface<'a>,
@@ -89,11 +114,13 @@ pub fn get_text<'a, T>(
         .render(&message)
         .blended(color)
         .map_err(|e| e.to_string())
-        .ok().unwrap();
+        .ok()
+        .unwrap();
     let text_texture = texture_creator
         .create_texture_from_surface(&text_surface)
         .map_err(|e| e.to_string())
-        .ok().unwrap();
+        .ok()
+        .unwrap();
     let text_sprite = Rect::new(
         0,
         0,
