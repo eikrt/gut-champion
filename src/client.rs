@@ -44,6 +44,8 @@ const STATUS_percentage_color: Color = Color::RGBA(255, 255, 195, 255);
 const NEUTRAL_COLOR: Color = Color::RGBA(255, 255, 195, 255);
 const HOVERED_COLOR: Color = Color::RGBA(255, 155, 95, 255);
 const PRESSED_COLOR: Color = Color::RGBA(255, 55, 55, 255);
+const TILT_TIME_SIDE: u128 = 186;
+const TILT_TIME_UP: u128 = 48;
 
 fn client_threads(
     player_id: u64,
@@ -383,7 +385,7 @@ fn main_loop() -> Result<(), String> {
         },
     ];
     let mut tilt_change = 0;
-    let mut tilt_time = 132;
+    let mut tilt_time = 186;
     let mut tilting = false;
     let mut smashing = false;
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
@@ -464,6 +466,7 @@ fn main_loop() -> Result<(), String> {
     let mut choose_network = true;
     let mut choose_character = false;
     let mut running = true;
+    let mut jump = false;
     let mut event_pump = sdl_context.event_pump()?;
     let mut compare_time = SystemTime::now();
     // socket stuff
@@ -507,9 +510,8 @@ fn main_loop() -> Result<(), String> {
 
                             do_not_move = false;
                         }
-
-                        if !w && !smashing && !do_not_move {
-                            entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
+                        if !w {
+                            jump = true;
                         }
                     }
                     if !w {
@@ -552,6 +554,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::J),
                     ..
                 } => {
+                    jump = false;
                     j = true;
                 }
                 Event::KeyDown {
@@ -568,12 +571,16 @@ fn main_loop() -> Result<(), String> {
                         if choose_character {
                             if select_index == 0 {
                                 player_class = ClassType::Alchemist;
-                            }
-                            else if select_index == 1 {
+                            } else if select_index == 1 {
                                 player_class = ClassType::Commodore;
                             }
 
-                                entities.lock().unwrap().get_mut(&player_id).unwrap().current_class = player_class.clone();
+                            entities
+                                .lock()
+                                .unwrap()
+                                .get_mut(&player_id)
+                                .unwrap()
+                                .current_class = player_class.clone();
                             client_threads(
                                 player_id,
                                 ip.to_string(),
@@ -582,6 +589,7 @@ fn main_loop() -> Result<(), String> {
                                 network_entities_thread.clone(),
                             );
                             game_running = true;
+                            choose_character = false;
                         }
                         if choose_network {
                             if select_index == 0 {
@@ -598,10 +606,12 @@ fn main_loop() -> Result<(), String> {
                             choose_character = true;
                             choose_network = false;
                         }
+                        if game_running {}
                     }
-                    space = false;
 
-                    space = true;
+                    if !space && !smashing && !do_not_move {
+                        jump = true;
+                    }
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::D),
@@ -1266,6 +1276,17 @@ fn main_loop() -> Result<(), String> {
                     SCALE,
                     SCALE,
                 );
+            }
+            if w || space {
+                tilt_time = TILT_TIME_UP;
+            }
+            else {
+                tilt_time = TILT_TIME_SIDE;
+
+            }
+            if jump && !smashing && !do_not_move {
+                entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
+                jump = false;
             }
         }
         canvas.present();
