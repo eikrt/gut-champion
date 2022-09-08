@@ -1,10 +1,12 @@
-use crate::graphics::Sprite;
+use crate::graphics::*;
 use crate::network::*;
+use crate::environment::*;
 use lerp::Lerp;
 use serde::{Deserialize, Serialize};
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
 const SMASH_RATIO: f32 = 750.0;
+const ENTITY_MARGIN: f32 = 8.0;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ActionType {
     Jab,
@@ -59,10 +61,12 @@ pub struct Entity {
     pub dx: f32,
     pub dy: f32,
     pub hp: i32,
+    pub stocks: i32,
     pub dir: bool,
     pub next_step: (f32, f32),
     pub collide_directions: (bool, bool, bool, bool),
     pub current_sprite: Sprite,
+    pub freeze_sprite: Sprite,
     pub hitboxes: Vec<HitBox>,
     pub move_lock: bool,
     pub current_action: Action,
@@ -72,6 +76,9 @@ pub struct Entity {
     pub inv_change: f32,
     pub flying: bool,
     pub jump_counter: u8,
+    pub collide_sides: bool,
+    pub drop: bool,
+    pub freeze: bool,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -82,6 +89,7 @@ impl AsNetworkEntity for Entity {
             dy: self.dy,
             hp: self.hp,
             dir: self.dir,
+            stocks: self.stocks,
             //h: self.h,
             // w: self.w,
             //next_step: self.next_step,
@@ -369,6 +377,14 @@ impl Class {
 }
 impl Entity {
     pub fn tick(&mut self, delta: u128) {
+        if self.stocks < 0 {
+            std::process::exit(0);
+        }
+        self.current_sprite = get_animations(self.current_class.clone(),self.current_action.action.clone()); 
+        
+        if self.freeze {
+            self.current_sprite = self.freeze_sprite.clone();
+        }
         self.inv_change += delta as f32;
         for hitbox in &mut self.hitboxes {
             let mut h_x = self.x;
@@ -397,8 +413,17 @@ impl Entity {
         if self.next_step.1 == 0.0 {
             self.jump_counter = 0;
         }
+        if self.y > 256.0 {
+            self.stocks -= 1;
+            self.x = 48.0;
+            self.y = 0.0;
+        }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
+
+        if self.freeze {
+            return;
+        }
         self.current_action = action.clone();
         let mut h_x = self.x;
         let mut h_y = self.y + action.y;
@@ -427,6 +452,7 @@ impl Entity {
         if self.inv_change < self.inv_time {
             return;
         }
+        self.freeze = true;
         let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
         let hit_multiplier = 1.0 + self.hp as f32 / 100.0;
         let hit_multiplier_knock = 3.0 + self.hp as f32 / 50.0;
@@ -450,14 +476,13 @@ impl Entity {
     }
     pub fn jump(&mut self) {
         if self.next_step.1 == 0.0 {
-            
             self.jump_counter = 0;
         }
         if self.jump_counter > 1 {
             return;
         }
-            
-            self.dy = -JUMP_STRENGTH;
+
+        self.dy = -JUMP_STRENGTH;
 
         self.jump_counter += 1;
     }
@@ -472,11 +497,20 @@ impl Entity {
         }
         self.collide_directions = (false, false, false, false);
     }
-    pub fn collide_with(&mut self, delta: u128, other: &Entity) {
+    pub fn collide_with_obstacle(&mut self, delta: u128, other: &Obstacle) {
+        let mut drop_self = true;
+        if other.obstacle_type == ObstacleType::Platform {
+            if self.drop {
+                drop_self = false;
+            }
+        }
         if self.y + self.next_step.1 + self.h < other.y + other.h
             && self.y + self.next_step.1 + self.h > other.y
-            && self.x > other.x
-            && self.x < other.x + other.w
+            && self.x + self.w - ENTITY_MARGIN > other.x
+            && self.x + ENTITY_MARGIN < other.x + other.w
+            && self.next_step.1 > 0.0 
+            && drop_self
+             
         {
             self.next_step.1 = 0.0;
             self.collide_directions.2 = true;
@@ -487,8 +521,9 @@ impl Entity {
 
         if self.x + self.next_step.0 < other.x + other.w
             && self.x + self.next_step.0 + self.w > other.x
-            && self.y > other.y + 5.0
-            && self.y < other.y + other.h
+            && self.y + self.h > other.y + 2.0
+            && self.y + self.h < other.y + other.h
+            && other.obstacle_type == ObstacleType::Stage
         {
             self.next_step.0 = 0.0;
             self.collide_directions.3 = true;
@@ -500,7 +535,10 @@ impl Entity {
     }
     pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
         for hitbox in &other.hitboxes {
-            if self.x < hitbox.x as f32 + hitbox.w as f32 && self.x + self.w > hitbox.x as f32 && self.y < hitbox.y as f32+ hitbox.h as f32 && self.y + self.h > hitbox.y as f32
+            if self.x < hitbox.x as f32 + hitbox.w as f32
+                && self.x + self.w > hitbox.x as f32
+                && self.y < hitbox.y as f32 + hitbox.h as f32
+                && self.y + self.h > hitbox.y as f32
             {
                 self.take_hit(delta, &hitbox);
             }

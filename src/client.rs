@@ -40,9 +40,10 @@ const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = false;
+const SHOW_BACKGROUND: bool = true;
 const MSG_SIZE: usize = 96;
 const STATUS_FONT_SIZE: u16 = 200;
-const STATUS_percentage_color: Color = Color::RGBA(255, 255, 195, 255);
+const STATUS_PERCENTAGE_COLOR: Color = Color::RGBA(255, 255, 195, 255);
 const NEUTRAL_COLOR: Color = Color::RGBA(255, 255, 195, 255);
 const HOVERED_COLOR: Color = Color::RGBA(255, 155, 95, 255);
 const PRESSED_COLOR: Color = Color::RGBA(255, 55, 55, 255);
@@ -56,7 +57,6 @@ fn client_threads(
     entities_send: Arc<Mutex<HashMap<u64, Entity>>>,
     network_entities_thread: Arc<Mutex<HashMap<u64, NetworkEntity>>>,
 ) {
-    
     let mut time_from_last_packet_compare = SystemTime::now();
     let mut client = TcpStream::connect(ip).expect("Connection failed...");
     client.set_nonblocking(true);
@@ -167,7 +167,7 @@ fn main_loop() -> Result<(), String> {
         .into_canvas()
         .build()
         .expect("could not make a canvas");
-    let mut camera = Camera{
+    let mut camera = Camera {
         x: 0.0,
         y: 0.0,
         dx: 0.0,
@@ -185,6 +185,8 @@ fn main_loop() -> Result<(), String> {
     let floor_color = Color::RGB(64, 32, 30);
     let player_color = Color::RGB(128, 128, 0);
     let mut hit_change = 0.0;
+    let mut drop_change = 0;
+    let mut drop_time = 300;
     let sprites = HashMap::from([
         (
             Sprite::Commodore,
@@ -295,6 +297,18 @@ fn main_loop() -> Result<(), String> {
                 .unwrap(),
         ),
         (
+            Sprite::AlchemistFreeze,
+            texture_creator
+                .load_texture("res/alchemist/alchemist_freeze.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::CommodoreFreeze,
+            texture_creator
+                .load_texture("res/commodore/commodore_freeze.png")
+                .unwrap(),
+        ),
+        (
             Sprite::Basement,
             texture_creator
                 .load_texture("res/bgs/basement_bg.png")
@@ -328,6 +342,12 @@ fn main_loop() -> Result<(), String> {
             Sprite::LongButtonPressed,
             texture_creator
                 .load_texture("res/button/long_button_pressed.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::Platform,
+            texture_creator
+                .load_texture("res/environment/platform.png")
                 .unwrap(),
         ),
     ]);
@@ -411,6 +431,7 @@ fn main_loop() -> Result<(), String> {
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
             current_sprite: player_sprite.clone(),
+            freeze_sprite: get_sprites(player_class.clone(), "freeze".to_string()),
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
@@ -419,6 +440,10 @@ fn main_loop() -> Result<(), String> {
             inv_change: 0.0,
             inv_time: 1000.0,
             jump_counter: 0,
+            collide_sides: false,
+            drop: false,
+            freeze: false,
+            stocks: 3,
         },
     )])));
     let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
@@ -430,31 +455,52 @@ fn main_loop() -> Result<(), String> {
     let mut entities_send = entities.clone();
 
     let mut entities_thread = entities.clone();
-    let mut environment: HashMap<u64, Entity> = HashMap::from([(
-        rng.gen(),
-        Entity {
-            x: 24.0,
-            y: 80.0,
-            h: 0.0,
-            w: 0.0,
-            dx: 0.0,
-            dy: 0.0,
-            dir: true,
-            hp: 0,
-            flying: false,
-            next_step: (0.0, 0.0),
-            collide_directions: (false, false, false, false),
-            current_sprite: Sprite::Ground,
-            hitboxes: Vec::new(),
-            move_lock: false,
-            current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
-            current_class: player_class.clone(),
-            name: "obstacle".to_string(),
-            inv_change: 0.0,
-            inv_time: 1000.0,
-            jump_counter: 0,
-        },
-    )]);
+    let mut environment: HashMap<u64, Obstacle> = HashMap::from([
+        (
+            rng.gen(),
+            Obstacle {
+                x: 24.0,
+                y: 70.0,
+                h: 0.0,
+                w: 0.0,
+                current_sprite: Sprite::Ground,
+                obstacle_type: ObstacleType::Stage,
+            },
+        ),
+        (
+            rng.gen(),
+            Obstacle {
+                x: 50.0,
+                y: 40.0,
+                h: 0.0,
+                w: 0.0,
+                current_sprite: Sprite::Platform,
+                obstacle_type: ObstacleType::Platform,
+            },
+        ),
+        (
+            rng.gen(),
+            Obstacle {
+                x: 108.0,
+                y: 10.0,
+                h: 0.0,
+                w: 0.0,
+                current_sprite: Sprite::Platform,
+                obstacle_type: ObstacleType::Platform,
+            },
+        ),
+        (
+            rng.gen(),
+            Obstacle {
+                x: 170.0,
+                y: 40.0,
+                h: 0.0,
+                w: 0.0,
+                current_sprite: Sprite::Platform,
+                obstacle_type: ObstacleType::Platform,
+            },
+        ),
+    ]);
     let mut entities_client: HashMap<u64, Entity> = HashMap::new();
     let mut w = false;
     let mut a = false;
@@ -470,6 +516,8 @@ fn main_loop() -> Result<(), String> {
     let mut k = false;
     let mut do_not_move = false;
     let mut smash_change = 0;
+    let mut freeze_change = 0;
+    let mut freeze_time = 64;
     let mut game_running = false;
     let mut choose_network = true;
     let mut choose_character = false;
@@ -485,7 +533,20 @@ fn main_loop() -> Result<(), String> {
         if delta.as_millis() / 10 != 0 {
             //   println!("FPS: {}", 100 / (delta.as_millis()/10));
         }
-
+        if entities.lock().unwrap().get(&player_id).unwrap().drop {
+            drop_change += delta.as_millis();
+            if drop_change > drop_time {
+                drop_change = 0;
+                entities.lock().unwrap().get_mut(&player_id).unwrap().drop = false;
+            }
+        }
+        if entities.lock().unwrap().get(&player_id).unwrap().freeze {
+            freeze_change += delta.as_millis();
+            if freeze_change > freeze_time {
+                entities.lock().unwrap().get_mut(&player_id).unwrap().freeze = false;
+                freeze_change = 0;
+            }
+        }
         canvas.set_draw_color(bg_color);
         canvas.clear();
         hit_change += delta.as_millis() as f32;
@@ -557,6 +618,7 @@ fn main_loop() -> Result<(), String> {
                         select_index += 1;
                     }
                     s = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().drop = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::J),
@@ -1041,6 +1103,7 @@ fn main_loop() -> Result<(), String> {
             for (id, e) in entities.lock().unwrap().iter_mut() {
                 e.tick(delta.as_millis());
             }
+
             for (id, e) in network_entities.lock().unwrap().iter_mut() {
                 // e.tick(*time_from_last_packet_main.lock().unwrap());
             }
@@ -1048,7 +1111,7 @@ fn main_loop() -> Result<(), String> {
 
             for (id, e) in entities.lock().unwrap().iter_mut() {
                 for env in environment.values_mut() {
-                    e.collide_with(delta.as_millis(), env);
+                    e.collide_with_obstacle(delta.as_millis(), env);
                 }
                 for (o_id, o_e) in entities_network_clone.iter() {
                     e.collide_with_hitboxes(delta.as_millis(), o_e);
@@ -1065,39 +1128,20 @@ fn main_loop() -> Result<(), String> {
             /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
                 e.execute_movement();
             }*/
-            let p_class = entities
-                .lock()
-                .unwrap()
-                .get(&player_id)
-                .unwrap()
-                .current_class
-                .clone();
-            let p_action = entities
-                .lock()
-                .unwrap()
-                .get(&player_id)
-                .unwrap()
-                .current_action
-                .action
-                .clone();
-            entities
-                .lock()
-                .unwrap()
-                .get_mut(&player_id)
-                .unwrap()
-                .current_sprite = get_animations(p_class, p_action);
             // draw bg
-            let texture = &sprites.get(&Sprite::Basement).unwrap();
-            canvas.copy(
-                texture,
-                Rect::new(0, 0, texture.query().width, texture.query().height),
-                Rect::new(
-                    (0.0 * SCALE as f32) as i32,
-                    (0.0* SCALE as f32) as i32,
-                    texture.query().width * SCALE as u32,
-                    texture.query().height * SCALE as u32,
-                ),
-            )?;
+            if SHOW_BACKGROUND {
+                let texture = &sprites.get(&Sprite::Basement).unwrap();
+                canvas.copy(
+                    texture,
+                    Rect::new(0, 0, texture.query().width, texture.query().height),
+                    Rect::new(
+                        (0.0 * SCALE as f32) as i32,
+                        (0.0 * SCALE as f32) as i32,
+                        texture.query().width * SCALE as u32,
+                        texture.query().height * SCALE as u32,
+                    ),
+                )?;
+            }
             for (id, e) in entities.lock().unwrap().iter_mut() {
                 if !&sprites.contains_key(&e.current_sprite) {
                     continue;
@@ -1187,17 +1231,14 @@ fn main_loop() -> Result<(), String> {
             for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
                 let hp_percentage_visual = e.1.hp as f32 / 200.0;
                 let percentage_color = Color::RGBA(
-                    STATUS_percentage_color.r,
-                    (STATUS_percentage_color.g as f32).lerp(0.0, hp_percentage_visual) as u8,
-                    (STATUS_percentage_color.b as f32).lerp(0.0, hp_percentage_visual) as u8,
-                    STATUS_percentage_color.a,
+                    STATUS_PERCENTAGE_COLOR.r,
+                    (STATUS_PERCENTAGE_COLOR.g as f32).lerp(0.0, hp_percentage_visual) as u8,
+                    (STATUS_PERCENTAGE_COLOR.b as f32).lerp(0.0, hp_percentage_visual) as u8,
+                    STATUS_PERCENTAGE_COLOR.a,
                 );
-                if e.1.name.is_empty() {
-                    continue;
-                }
                 let name_text = get_text(
                     e.1.name.clone(),
-                    STATUS_percentage_color,
+                    STATUS_PERCENTAGE_COLOR,
                     STATUS_FONT_SIZE,
                     &status_font,
                     &texture_creator,
@@ -1205,7 +1246,7 @@ fn main_loop() -> Result<(), String> {
                 .unwrap();
                 let position = (
                     (180.0 * SCALE + i as f32 * 308.0 * SCALE) as i32,
-                    (SCALE * SCREEN_HEIGHT as f32 - 108.0 * SCALE) as i32,
+                    (SCALE * SCREEN_HEIGHT as f32 - 128.0 * SCALE) as i32,
                 );
                 render_text(
                     &mut canvas,
@@ -1215,6 +1256,14 @@ fn main_loop() -> Result<(), String> {
                     SCALE,
                     SCALE,
                 );
+                let stock_string =
+                    match e.1.stocks{
+                        0 => "".to_string(),
+                        1 => "*".to_string(),
+                        2 => "**".to_string(),
+                        3 => "***".to_string(),
+                        _ => "".to_string()
+                };
                 let hp_text = get_text(
                     format!("{}%", e.1.hp),
                     percentage_color,
@@ -1225,13 +1274,33 @@ fn main_loop() -> Result<(), String> {
                 .unwrap();
                 let position = (
                     (180.0 * SCALE + i as f32 * 308.0 * SCALE) as i32,
-                    (SCALE * SCREEN_HEIGHT as f32 - 60.0 * SCALE) as i32,
+                    (SCALE * SCREEN_HEIGHT as f32 - 85.0 * SCALE) as i32,
                 );
                 render_text(
                     &mut canvas,
                     &hp_text.text_texture,
                     position,
                     hp_text.text_sprite,
+                    SCALE,
+                    SCALE,
+                );
+                let stock_text = get_text(
+                    stock_string,
+                    NEUTRAL_COLOR,
+                    STATUS_FONT_SIZE,
+                    &status_font,
+                    &texture_creator,
+                )
+                .unwrap();
+                let position = (
+                    (170.0 * SCALE + 50.0 + i as f32 * 308.0 * SCALE) as i32,
+                    ((SCREEN_HEIGHT as f32 - 40.0) * SCALE) as i32,
+                );
+                render_text(
+                    &mut canvas,
+                    &stock_text.text_texture,
+                    position,
+                    stock_text.text_sprite,
                     SCALE,
                     SCALE,
                 );
@@ -1239,14 +1308,14 @@ fn main_loop() -> Result<(), String> {
             for (i, e) in entities.lock().unwrap().iter().enumerate() {
                 let hp_percentage_visual = e.1.hp as f32 / 200.0;
                 let percentage_color = Color::RGBA(
-                    STATUS_percentage_color.r,
-                    (STATUS_percentage_color.g as f32).lerp(0.0, hp_percentage_visual) as u8,
-                    (STATUS_percentage_color.b as f32).lerp(0.0, hp_percentage_visual) as u8,
-                    STATUS_percentage_color.a,
+                    STATUS_PERCENTAGE_COLOR.r,
+                    (STATUS_PERCENTAGE_COLOR.g as f32).lerp(0.0, hp_percentage_visual) as u8,
+                    (STATUS_PERCENTAGE_COLOR.b as f32).lerp(0.0, hp_percentage_visual) as u8,
+                    STATUS_PERCENTAGE_COLOR.a,
                 );
                 let name_text = get_text(
                     e.1.name.clone(),
-                    STATUS_percentage_color,
+                    STATUS_PERCENTAGE_COLOR,
                     STATUS_FONT_SIZE,
                     &status_font,
                     &texture_creator,
@@ -1254,7 +1323,7 @@ fn main_loop() -> Result<(), String> {
                 .unwrap();
                 let position = (
                     (40.0 + i as f32 * 308.0 * SCALE) as i32,
-                    (SCALE * SCREEN_HEIGHT as f32 - 108.0 * SCALE) as i32,
+                    (SCALE * SCREEN_HEIGHT as f32 - 128.0 * SCALE) as i32,
                 );
                 render_text(
                     &mut canvas,
@@ -1264,6 +1333,14 @@ fn main_loop() -> Result<(), String> {
                     SCALE,
                     SCALE,
                 );
+                let stock_string =
+                    match e.1.stocks{
+                        0 => "".to_string(),
+                        1 => "*".to_string(),
+                        2 => "**".to_string(),
+                        3 => "***".to_string(),
+                        _ => "".to_string()
+                };
                 let hp_text = get_text(
                     format!("{}%", e.1.hp),
                     percentage_color,
@@ -1274,7 +1351,7 @@ fn main_loop() -> Result<(), String> {
                 .unwrap();
                 let position = (
                     (40.0 + i as f32 * 308.0 * SCALE) as i32,
-                    (SCALE * SCREEN_HEIGHT as f32 - 60.0 * SCALE) as i32,
+                    (SCALE * SCREEN_HEIGHT as f32 - 85.0 * SCALE) as i32,
                 );
                 render_text(
                     &mut canvas,
@@ -1284,13 +1361,31 @@ fn main_loop() -> Result<(), String> {
                     SCALE,
                     SCALE,
                 );
+                let stock_text = get_text(
+                    stock_string,
+                    NEUTRAL_COLOR,
+                    STATUS_FONT_SIZE,
+                    &status_font,
+                    &texture_creator,
+                )
+                .unwrap();
+                let position = (
+                    (50.0 + i as f32 * 308.0 * SCALE) as i32,
+                    ((SCREEN_HEIGHT as f32 - 40.0) * SCALE) as i32,
+                );
+                render_text(
+                    &mut canvas,
+                    &stock_text.text_texture,
+                    position,
+                    stock_text.text_sprite,
+                    SCALE,
+                    SCALE,
+                );
             }
             if w || space {
                 tilt_time = TILT_TIME_UP;
-            }
-            else {
+            } else {
                 tilt_time = TILT_TIME_SIDE;
-
             }
             if jump && !smashing && !do_not_move {
                 entities.lock().unwrap().get_mut(&player_id).unwrap().jump();

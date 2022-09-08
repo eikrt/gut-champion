@@ -16,6 +16,7 @@ const CAMERA_SPEED: f32 = 32.0;
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Sprite {
     Ground,
+    Platform,
     Alchemist,
     AlchemistJab,
     AlchemistNair,
@@ -25,6 +26,7 @@ pub enum Sprite {
     AlchemistSlide,
     AlchemistSideSmash,
     AlchemistUpSmash,
+    AlchemistFreeze,
     Commodore,
     CommodoreJab,
     CommodoreNair,
@@ -34,6 +36,7 @@ pub enum Sprite {
     CommodoreSlide,
     CommodoreSideSmash,
     CommodoreUpSmash,
+    CommodoreFreeze,
     Basement,
     LongButtonMain,
     LongButtonHovered,
@@ -64,6 +67,18 @@ pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
             ActionType::UpSmash => Sprite::AlchemistUpSmash,
             ActionType::Idle => Sprite::Alchemist,
         },
+    }
+}
+pub fn get_sprites(class: ClassType, key: String) -> Sprite{
+    match class {
+        ClassType::Commodore => match key.as_str() {
+            "freeze" => Sprite::CommodoreFreeze,
+            _ => Sprite::Commodore
+        }
+        ClassType::Alchemist => match key.as_str() {
+            "freeze" => Sprite::AlchemistFreeze,
+            _ => Sprite::Alchemist
+        }
     }
 }
 

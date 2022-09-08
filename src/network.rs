@@ -33,6 +33,7 @@ pub struct NetworkEntity {
     //pub h: f32,
     //pub next_step: (f32,f32),
     pub hp: i32,
+    pub stocks: i32,
     pub dir: bool,
     pub hitboxes: Vec<NetworkBare>,
     pub name: String,
