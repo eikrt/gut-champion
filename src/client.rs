@@ -32,8 +32,10 @@ use std::{
     io::{self, ErrorKind},
     process::exit,
     sync::mpsc,
+    thread,
+    time,
+    fs,
 };
-use std::{thread, time};
 const SCALE: f32 = 4.0;
 const RESOLUTION_X: u32 = 256;
 const RESOLUTION_Y: u32 = 144;
@@ -49,7 +51,13 @@ const HOVERED_COLOR: Color = Color::RGBA(255, 155, 95, 255);
 const PRESSED_COLOR: Color = Color::RGBA(255, 55, 55, 255);
 const TILT_TIME_SIDE: u128 = 186;
 const TILT_TIME_UP: u128 = 48;
-
+const CONF_PATH: &str = "./conf/conf";
+#[derive(PartialEq)]
+enum MenuState {
+    Network,
+    Character,
+    Game,
+}
 fn client_threads(
     player_id: u64,
     ip: String,
@@ -173,6 +181,9 @@ fn main_loop() -> Result<(), String> {
         dx: 0.0,
         dy: 0.0,
     };
+    let custom_server_ip = fs::read_to_string(CONF_PATH)
+        .expect("Couldn't find configuration file...");
+    let mut menu_state = MenuState::Network;
     let _image_context = image::init(InitFlag::PNG | InitFlag::JPG)?;
 
     let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
@@ -408,8 +419,22 @@ fn main_loop() -> Result<(), String> {
             action: ButtonAction::Connect,
             hovered: false,
             pressed: false,
-            text: "Gut Arena".to_string(),
+            text: "Custom Server".to_string(),
             index: 1,
+        },
+        Button {
+            x: 8,
+            y: 44 + 36,
+            w: long_button_sprite.query().width as i32,
+            h: long_button_sprite.query().height as i32,
+            main_sprite: Sprite::LongButtonMain,
+            hovered_sprite: Sprite::LongButtonHovered,
+            pressed_sprite: Sprite::LongButtonPressed,
+            action: ButtonAction::Connect,
+            hovered: false,
+            pressed: false,
+            text: "Gut Arena".to_string(),
+            index: 2,
         },
     ];
     let mut tilt_change = 0;
@@ -518,9 +543,6 @@ fn main_loop() -> Result<(), String> {
     let mut smash_change = 0;
     let mut freeze_change = 0;
     let mut freeze_time = 64;
-    let mut game_running = false;
-    let mut choose_network = true;
-    let mut choose_character = false;
     let mut running = true;
     let mut jump = false;
     let mut event_pump = sdl_context.event_pump()?;
@@ -564,7 +586,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::W),
                     ..
                 } => {
-                    if game_running {
+                    if menu_state == MenuState::Game {
                         if !w
                             && entities
                                 .lock()
@@ -592,7 +614,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
-                    if game_running {
+                    if menu_state == MenuState::Game {
                         if !a
                             && entities
                                 .lock()
@@ -638,7 +660,7 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     if !space {
-                        if choose_character {
+                        if menu_state == MenuState::Character {
                             if select_index == 0 {
                                 player_class = ClassType::Alchemist;
                             } else if select_index == 1 {
@@ -658,25 +680,28 @@ fn main_loop() -> Result<(), String> {
                                 entities_send.clone(),
                                 network_entities_thread.clone(),
                             );
-                            game_running = true;
-                            choose_character = false;
+                            menu_state = MenuState::Game;
                         }
-                        if choose_network {
+                        if menu_state == MenuState::Network {
                             if select_index == 0 {
                                 if network_buttons[0].action == ButtonAction::Connect {
                                     ip = "localhost:8888";
                                 }
                             }
-                            if select_index == 1 {
+                            else if select_index == 1 {
                                 if network_buttons[1].action == ButtonAction::Connect {
+                                    ip = &custom_server_ip.trim();
+                                }
+                            }
+                            else if select_index == 2 {
+                                if network_buttons[2].action == ButtonAction::Connect {
                                     ip = "165.22.86.59:8888";
                                 }
                             }
 
-                            choose_character = true;
-                            choose_network = false;
+                            menu_state = MenuState::Character;
                         }
-                        if game_running {}
+                        select_index = 0;
                     }
 
                     if !space && !smashing && !do_not_move {
@@ -687,7 +712,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
-                    if game_running {
+                        if menu_state == MenuState::Game{
                         if !d
                             && entities
                                 .lock()
@@ -760,7 +785,8 @@ fn main_loop() -> Result<(), String> {
         if select_index > select_top - 1 {
             select_index = select_top - 1;
         }
-        if choose_network {
+        match menu_state {
+            MenuState::Network => {
             select_top = network_buttons.len() as i32;
             for b in network_buttons.iter_mut() {
                 b.hovered = false;
@@ -814,8 +840,8 @@ fn main_loop() -> Result<(), String> {
                     SCALE,
                 );
             }
-        }
-        if choose_character {
+        },
+        MenuState::Character => {
             select_top = character_buttons.len() as i32;
             for b in character_buttons.iter_mut() {
                 b.hovered = false;
@@ -870,8 +896,8 @@ fn main_loop() -> Result<(), String> {
                     SCALE,
                 );
             }
-        }
-        if game_running {
+        },
+        MenuState::Game => {
             if tilting && j {
                 smashing = true;
             }
@@ -1395,7 +1421,8 @@ fn main_loop() -> Result<(), String> {
             let p_y = entities.lock().unwrap().get_mut(&player_id).unwrap().y;
             camera.move_towards_point(p_x, p_y);
             camera.tick(delta.as_millis());
-        }
+        
+        }};
         canvas.present();
         compare_time = SystemTime::now();
 
