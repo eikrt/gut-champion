@@ -437,6 +437,8 @@ impl Entity {
             self.x = 48.0;
             self.y = 0.0;
             self.hp = 0;
+            self.dy = 0.0;
+            self.dx = 0.0;
         }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
