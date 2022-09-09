@@ -1,13 +1,13 @@
+use crate::environment::*;
 use crate::graphics::*;
 use crate::network::*;
-use crate::environment::*;
 use lerp::Lerp;
 use serde::{Deserialize, Serialize};
 const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
 const SMASH_RATIO: f32 = 750.0;
 const ENTITY_MARGIN: f32 = 8.0;
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum ActionType {
     Jab,
     Nair,
@@ -79,6 +79,8 @@ pub struct Entity {
     pub collide_sides: bool,
     pub drop: bool,
     pub freeze: bool,
+    pub walk_change: i32,
+    pub walk_time: i32,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -380,8 +382,24 @@ impl Entity {
         if self.stocks < 0 {
             std::process::exit(0);
         }
-        self.current_sprite = get_animations(self.current_class.clone(),self.current_action.action.clone()); 
-        
+        if self.current_action.action == ActionType::Idle {
+            self.walk_change += delta as i32;
+            if self.walk_change > self.walk_time {
+                if self.current_sprite == get_sprites(self.current_class.clone(), "1".to_string()) {
+                    self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
+                } else if self.current_sprite
+                    == get_sprites(self.current_class.clone(), "2".to_string())
+                {
+                    self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                }
+                self.walk_change = 0;
+            }
+        } else {
+            self.current_sprite = get_animations(
+                self.current_class.clone().clone(),
+                self.current_action.action.clone(),
+            );
+        }
         if self.freeze {
             self.current_sprite = self.freeze_sprite.clone();
         }
@@ -402,6 +420,7 @@ impl Entity {
         for hitbox in &mut self.hitboxes {
             hitbox.change += delta as f32;
             if hitbox.change > hitbox.duration {
+                self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
                 hitbox.active = false;
                 self.move_lock = false;
             }
@@ -420,7 +439,6 @@ impl Entity {
         }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
-
         if self.freeze {
             return;
         }
@@ -508,9 +526,8 @@ impl Entity {
             && self.y + self.next_step.1 + self.h > other.y
             && self.x + self.w - ENTITY_MARGIN > other.x
             && self.x + ENTITY_MARGIN < other.x + other.w
-            && self.next_step.1 > 0.0 
+            && self.next_step.1 > 0.0
             && drop_self
-             
         {
             self.next_step.1 = 0.0;
             self.collide_directions.2 = true;

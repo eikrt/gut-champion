@@ -314,6 +314,18 @@ fn main_loop() -> Result<(), String> {
                 .unwrap(),
         ),
         (
+            Sprite::Alchemist2,
+            texture_creator
+                .load_texture("res/alchemist/alchemist_2.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::Commodore2,
+            texture_creator
+                .load_texture("res/commodore/commodore_2.png")
+                .unwrap(),
+        ),
+        (
             Sprite::CommodoreFreeze,
             texture_creator
                 .load_texture("res/commodore/commodore_freeze.png")
@@ -455,11 +467,11 @@ fn main_loop() -> Result<(), String> {
             flying: false,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
-            current_sprite: player_sprite.clone(),
+            current_sprite: get_sprites(player_class.clone(), "1".to_string()),
             freeze_sprite: get_sprites(player_class.clone(), "freeze".to_string()),
             hitboxes: Vec::new(),
             move_lock: false,
-            current_action: Action::action(player_class.clone(), ActionType::Jab, 1),
+            current_action: Action::action(player_class.clone(), ActionType::Idle, 1),
             current_class: player_class.clone(),
             name: player_name.to_string(),
             inv_change: 0.0,
@@ -469,6 +481,8 @@ fn main_loop() -> Result<(), String> {
             drop: false,
             freeze: false,
             stocks: 3,
+            walk_time: 250,
+            walk_change: 0,
         },
     )])));
     let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
@@ -673,6 +687,12 @@ fn main_loop() -> Result<(), String> {
                                 .get_mut(&player_id)
                                 .unwrap()
                                 .current_class = player_class.clone();
+                            entities
+                                .lock()
+                                .unwrap()
+                                .get_mut(&player_id)
+                                .unwrap().
+                                current_sprite = get_sprites(player_class.clone(), "1".to_string());
                             client_threads(
                                 player_id,
                                 ip.to_string(),

@@ -75,10 +75,14 @@ pub fn get_sprites(class: ClassType, key: String) -> Sprite{
     match class {
         ClassType::Commodore => match key.as_str() {
             "freeze" => Sprite::CommodoreFreeze,
+            "1" => Sprite::Commodore,
+            "2" => Sprite::Commodore2,
             _ => Sprite::Commodore
         }
         ClassType::Alchemist => match key.as_str() {
             "freeze" => Sprite::AlchemistFreeze,
+            "1" => Sprite::Alchemist,
+            "2" => Sprite::Alchemist2,
             _ => Sprite::Alchemist
         }
     }
