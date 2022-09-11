@@ -1,5 +1,5 @@
-use crate::network::*;
 use crate::entity::*;
+use crate::network::*;
 use bincode;
 use lerp::Lerp;
 use mpsc::TryRecvError;
@@ -23,13 +23,11 @@ use std::str::from_utf8;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
-    env,
+    env, fs,
     io::{self, ErrorKind},
     process::exit,
     sync::mpsc,
-    thread,
-    time,
-    fs,
+    thread, time,
 };
 
 const MSG_SIZE: usize = 96;
@@ -109,5 +107,21 @@ pub fn client_threads(
             Err(TryRecvError::Disconnected) => break,
         }
         //thread::sleep(::std::time::Duration::from_millis(10));
+    });
+    thread::spawn(move || loop {
+        let msg = SendState {
+            id: player_id,
+            player: entities_send
+                .lock()
+                .unwrap()
+                .get(&player_id)
+                .unwrap()
+                .clone()
+                .get_as_network_entity(),
+        };
+        if tx.send(msg).is_err() {
+            break;
+        }
+        thread::sleep(time::Duration::from_millis(32));
     });
 }

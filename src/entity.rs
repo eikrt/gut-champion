@@ -385,10 +385,9 @@ impl Entity {
         if self.current_action.action == ActionType::Idle {
             self.walk_change += delta as i32;
             if self.walk_change > self.walk_time {
-                if self.current_sprite == get_sprites(self.current_class.clone(), "1".to_string()) {
-                    self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
-                } else if self.current_sprite
-                    == get_sprites(self.current_class.clone(), "2".to_string())
+                if self.current_sprite == get_sprites(self.current_class.clone(), "2".to_string()) {
+                    self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                } else
                 {
                     self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
                 }
@@ -475,8 +474,8 @@ impl Entity {
         }
         self.freeze = true;
         let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
-        let hit_multiplier = 1.0 + self.hp as f32 / 100.0;
-        let hit_multiplier_knock = 3.0 + self.hp as f32 / 50.0;
+        let hit_multiplier = 1.0 + self.hp as f32 / 80.0;
+        let hit_multiplier_knock = 3.0 + self.hp as f32 / 10.0;
         if hitbox.dir {
             self.dx += 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
             self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
