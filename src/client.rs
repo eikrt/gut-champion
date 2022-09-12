@@ -496,7 +496,7 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .execute_action(
                         delta.as_millis(),
-                        Action::action(player_class.clone(), ActionType::SideSmash, 100),
+                        Action::action(player_class.clone(), ActionType::Jab, 100),
                     );
                 auto_walk_change = 0;
             }
@@ -1235,7 +1235,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        (180.0 * SCALE + i as f32 * 308.0 * SCALE) as i32,
+                        ((i as f32 * 200.0 + 200.0) * SCALE) as i32,
                         (SCALE * SCREEN_HEIGHT as f32 - 128.0 * SCALE) as i32,
                     );
                     render_text(
@@ -1262,7 +1262,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        (180.0 * SCALE + i as f32 * 308.0 * SCALE) as i32,
+                        ((i as f32 * 200.0 + 200.0) * SCALE) as i32,
                         (SCALE * SCREEN_HEIGHT as f32 - 85.0 * SCALE) as i32,
                     );
                     render_text(
@@ -1282,7 +1282,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        (170.0 * SCALE + 50.0 + i as f32 * 308.0 * SCALE) as i32,
+                        ((i as f32 * 200.0 + 200.0) * SCALE) as i32,
                         ((SCREEN_HEIGHT as f32 - 40.0) * SCALE) as i32,
                     );
                     render_text(
@@ -1311,7 +1311,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        (40.0 + i as f32 * 308.0 * SCALE) as i32,
+                        ((i as f32 * 200.0 + 14.0) * SCALE) as i32,
                         (SCALE * SCREEN_HEIGHT as f32 - 128.0 * SCALE) as i32,
                     );
                     render_text(
@@ -1337,8 +1337,9 @@ fn main_loop() -> Result<(), String> {
                         &texture_creator,
                     )
                     .unwrap();
+
                     let position = (
-                        (40.0 + i as f32 * 308.0 * SCALE) as i32,
+                        ((i as f32 * 200.0 + 14.0) * SCALE) as i32,
                         (SCALE * SCREEN_HEIGHT as f32 - 85.0 * SCALE) as i32,
                     );
                     render_text(
@@ -1358,7 +1359,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        (50.0 + i as f32 * 308.0 * SCALE) as i32,
+                        ((i as f32 * 200.0 + 14.0) * SCALE) as i32,
                         ((SCREEN_HEIGHT as f32 - 40.0) * SCALE) as i32,
                     );
                     render_text(

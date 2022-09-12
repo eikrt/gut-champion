@@ -308,7 +308,7 @@ impl Action {
                     x: -16.0,
                     y: 16.0,
                     knock_x: 0.0 * hit_ratio,
-                    knock_y: 50.0 * hit_ratio,
+                    knock_y: -50.0 * hit_ratio,
                     damage: 25.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 750.0,
@@ -382,14 +382,14 @@ impl Entity {
         if self.stocks < 0 {
             std::process::exit(0);
         }
-        if self.current_action.action == ActionType::Idle {
+        if self.current_action.action == ActionType::Idle && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1) {
             self.walk_change += delta as i32;
             if self.walk_change > self.walk_time {
                 if self.current_sprite == get_sprites(self.current_class.clone(), "2".to_string()) {
                     self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
                 } else
                 {
-                    self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                    self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
                 }
                 self.walk_change = 0;
             }
@@ -431,7 +431,7 @@ impl Entity {
         if self.next_step.1 == 0.0 {
             self.jump_counter = 0;
         }
-        if self.y > 256.0 {
+        if self.y > 256.0 || self.y < -100.0 || self.x < -100.0 || self.x > 256.0 + 100.0 {
             self.stocks -= 1;
             self.x = 48.0;
             self.y = 0.0;
@@ -474,7 +474,7 @@ impl Entity {
         }
         self.freeze = true;
         let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
-        let hit_multiplier = 1.0 + self.hp as f32 / 80.0;
+        let hit_multiplier = 1.0 + self.hp as f32 / 90.0;
         let hit_multiplier_knock = 3.0 + self.hp as f32 / 10.0;
         if hitbox.dir {
             self.dx += 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
