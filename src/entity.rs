@@ -483,6 +483,7 @@ impl Entity {
                 self.freeze_change = 0;
             }
         }
+        self.slow_movement();
         self.process_hit_actions(delta);
         if self.current_action.action == ActionType::Idle
             && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1)
@@ -542,7 +543,6 @@ impl Entity {
             self.dy = 0.0;
             self.dx = 0.0;
         }
-        self.slow_movement();
     }
     pub fn process_hit_actions(&mut self, delta: u128) {
         self.hit_change += delta as i32;
@@ -561,13 +561,6 @@ impl Entity {
                 self.tilt_change = 0;
                 self.tilting = false;
             }
-        }
-        if !self.left && !self.right && self.next_step.1 == 0.0 || self.smashing {
-            let slow_ratio = match self.flying {
-                true => 0.87,
-                false => 0.87,
-            };
-            self.dx -= self.dx.lerp(0.0, slow_ratio);
         }
         if self.hit_released {
             if (self.left || self.right)
@@ -716,7 +709,7 @@ impl Entity {
             };
             self.dx = self.dx.lerp(60.0, acc_ratio);
         }
-        else if !self.flying{
+        else if !self.flying && self.next_step.1 == 0.0 {
 
             self.dx = self.dx.lerp(0.0, 0.2);
         }
