@@ -14,8 +14,6 @@ use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font;
-use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;

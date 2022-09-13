@@ -19,8 +19,6 @@ use sdl2::render::Texture;
 use sdl2::render::{TextureCreator, WindowCanvas};
 use sdl2::surface::Surface;
 use sdl2::ttf::Font;
-use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -367,38 +365,30 @@ fn main_loop() -> Result<(), String> {
     let mut tilt_time = 186;
     let mut tilting = false;
     let mut smashing = false;
-    let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([(
-        player_id,
-        Entity {
-            x: 48.0,
-            y: 0.0,
-            h: 0.0,
-            w: 0.0,
-            dx: 0.0,
-            dy: 0.0,
-            dir: true,
-            hp: 0,
-            flying: false,
-            next_step: (0.0, 0.0),
-            collide_directions: (false, false, false, false),
-            current_sprite: get_sprites(player_class.clone(), "1".to_string()),
-            freeze_sprite: get_sprites(player_class.clone(), "freeze".to_string()),
-            hitboxes: Vec::new(),
-            move_lock: false,
-            current_action: Action::action(player_class.clone(), ActionType::Idle, 1),
-            current_class: player_class.clone(),
-            name: player_name.to_string(),
-            inv_change: 0.0,
-            inv_time: 1000.0,
-            jump_counter: 0,
-            collide_sides: false,
-            drop: false,
-            freeze: false,
-            stocks: 3,
-            walk_time: 250,
-            walk_change: 0,
-        },
-    )])));
+    let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([
+        (
+            player_id,
+            Entity::new(
+                48.0,
+                0.0,
+                get_sprites(player_class.clone(), "1".to_string()),
+                get_sprites(player_class.clone(), "freeze".to_string()),
+                player_class.clone(),
+                "Player".to_string(),
+            ),
+        ),
+        (
+            rng.gen(),
+            Entity::new(
+                98.0,
+                0.0,
+                get_sprites(player_class.clone(), "1".to_string()),
+                get_sprites(player_class.clone(), "freeze".to_string()),
+                player_class.clone(),
+                "Bot".to_string(),
+            ),
+        ),
+    ])));
     let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
     let mut time_from_last_packet_main: Arc<Mutex<u128>> = time_from_last_packet.clone();
     let mut time_from_last_packet_compare = SystemTime::now();
@@ -455,18 +445,7 @@ fn main_loop() -> Result<(), String> {
         ),
     ]);
     let mut entities_client: HashMap<u64, Entity> = HashMap::new();
-    let mut w = false;
-    let mut a = false;
-    let mut s = false;
-    let mut d = false;
     let mut space = false;
-    let mut w_released = false;
-    let mut a_released = false;
-    let mut s_released = false;
-    let mut d_released = false;
-    let mut j_released = false;
-    let mut j = false;
-    let mut k = false;
     let mut do_not_move = false;
     let mut smash_change = 0;
     let mut freeze_change = 0;
@@ -481,10 +460,11 @@ fn main_loop() -> Result<(), String> {
     let mut auto_walk_change = 0;
     let mut auto_walk_time = 500;
     while running {
+        let player_entity = entities.lock().unwrap().get(&player_id).unwrap().clone();
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if control_mode == ControlMode::Auto {
             auto_walk_change += delta.as_millis();
-            let player_dir = entities.lock().unwrap().get_mut(&player_id).unwrap().dir;
+            let player_dir = player_entity.dir;
 
             if auto_walk_change > auto_walk_time {
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dir = !player_dir;
@@ -506,14 +486,14 @@ fn main_loop() -> Result<(), String> {
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dx = -60.0;
             }
         }
-        if entities.lock().unwrap().get(&player_id).unwrap().drop {
+        if player_entity.drop {
             drop_change += delta.as_millis();
             if drop_change > drop_time {
                 drop_change = 0;
                 entities.lock().unwrap().get_mut(&player_id).unwrap().drop = false;
             }
         }
-        if entities.lock().unwrap().get(&player_id).unwrap().freeze {
+        if player_entity.freeze {
             freeze_change += delta.as_millis();
             if freeze_change > freeze_time {
                 entities.lock().unwrap().get_mut(&player_id).unwrap().freeze = false;
@@ -538,7 +518,7 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     if menu_state == MenuState::Game {
-                        if !w
+                        if !player_entity.up
                             && entities
                                 .lock()
                                 .unwrap()
@@ -552,21 +532,21 @@ fn main_loop() -> Result<(), String> {
 
                             do_not_move = false;
                         }
-                        if !w {
+                        if !player_entity.up {
                             jump = true;
                         }
                     }
-                    if !w {
+                    if !player_entity.up {
                         select_index -= 1;
                     }
-                    w = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().up = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
                     if menu_state == MenuState::Game {
-                        if !a
+                        if !player_entity.left
                             && entities
                                 .lock()
                                 .unwrap()
@@ -581,16 +561,16 @@ fn main_loop() -> Result<(), String> {
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
                     }
-                    a = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().left = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::S),
                     ..
                 } => {
-                    if !w {
+                    if !player_entity.up {
                         select_index += 1;
                     }
-                    s = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().down = true;
                     entities.lock().unwrap().get_mut(&player_id).unwrap().drop = true;
                 }
                 Event::KeyDown {
@@ -598,13 +578,13 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     jump = false;
-                    j = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().hit = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::K),
                     ..
                 } => {
-                    k = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().special = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
@@ -660,7 +640,7 @@ fn main_loop() -> Result<(), String> {
                         select_index = 0;
                     }
 
-                    if !space && !smashing && !do_not_move {
+                    if !space && !player_entity.smashing && !player_entity.do_not_move {
                         jump = true;
                     }
                 }
@@ -669,7 +649,7 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     if menu_state == MenuState::Game {
-                        if !d
+                        if !player_entity.right
                             && entities
                                 .lock()
                                 .unwrap()
@@ -684,7 +664,7 @@ fn main_loop() -> Result<(), String> {
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
                     }
-                    d = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().right = true;
                 }
 
                 // WASD
@@ -692,36 +672,36 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::W),
                     ..
                 } => {
-                    w = false;
-                    w_released = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().up = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().up_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
-                    a = false;
-                    a_released = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().left = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().left_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::S),
                     ..
                 } => {
-                    s = false;
-                    s_released = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().down = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().down_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
-                    d = false;
-                    d_released = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().right = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().right_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::J),
                     ..
                 } => {
-                    j = false;
-                    j_released = true;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().hit = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Space),
@@ -733,7 +713,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::K),
                     ..
                 } => {
-                    k = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().special = false;
                 }
                 _ => {}
             }
@@ -854,10 +834,10 @@ fn main_loop() -> Result<(), String> {
                 }
             }
             MenuState::Game => {
-                if tilting && j {
+                if player_entity.tilting && player_entity.hit {
                     smashing = true;
                 }
-                if smashing {
+                if player_entity.smashing {
                     smash_change += delta.as_millis();
                 } else {
                     smash_change = 1;
@@ -865,35 +845,12 @@ fn main_loop() -> Result<(), String> {
                 canvas.set_draw_color(bg_color);
                 canvas.clear();
 
-                let player_flying = entities.lock().unwrap().get(&player_id).unwrap().flying;
-                if true {
-                    if a && !smashing && !do_not_move {
-                        let acc_ratio =
-                            match player_flying {
-                                true => 0.02,
-                                false => 0.5,
-                            };
-                        let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
-
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().dx =
-                            dx.lerp(-60.0, acc_ratio);
-                    }
-                    if d && !smashing && !do_not_move {
-                        let acc_ratio =
-                            match player_flying {
-                                true => 0.02,
-                                false => 0.5,
-                            };
-                        let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().dx =
-                            dx.lerp(60.0, acc_ratio);
-                    }
-                }
-                if tilting {
+                for (id, e) in entities.lock().unwrap().iter_mut() {}
+                if player_entity.tilting {
                     tilt_change += delta.as_millis();
                     if tilt_change > tilt_time {
                         tilt_change = 0;
-                        tilting = false;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = false;
                     }
                 }
                 let next_step_y = entities
@@ -903,18 +860,18 @@ fn main_loop() -> Result<(), String> {
                     .unwrap()
                     .next_step
                     .1;
-                if !a && !d && next_step_y == 0.0 || smashing {
-                    let slow_ratio = match entities.lock().unwrap().get(&player_id).unwrap().flying
+                if !player_entity.left && !player_entity.right && next_step_y == 0.0 || smashing {
+                    let slow_ratio = match player_entity.flying
                     {
                         true => 0.87,
                         false => 0.87,
                     };
-                    let dx = entities.lock().unwrap().get_mut(&player_id).unwrap().dx;
+                    let dx = player_entity.dx;
                     entities.lock().unwrap().get_mut(&player_id).unwrap().dx -=
                         dx.lerp(0.0, slow_ratio);
                 }
-                if j_released {
-                    if (a || d)
+                if player_entity.hit_released {
+                    if (player_entity.left || player_entity.right)
                         && hit_change
                             > Action::action(player_class.clone(), ActionType::Slide, smash_change)
                                 .hit_time
@@ -934,17 +891,17 @@ fn main_loop() -> Result<(), String> {
                                 Action::action(player_class.clone(), hit_type, smash_change),
                             );
                         hit_change = 0.0;
-                        j_released = false;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = false;
                     }
-                    if w && hit_change
+                    if player_entity.up && hit_change
                         > Action::action(player_class.clone(), ActionType::UpSmash, smash_change)
                             .hit_time
-                        && smashing
+                        && player_entity.smashing
                     {
                         let mut hit_type = ActionType::UpSmash;
                         hit_type = ActionType::UpSmash;
-                        smashing = false;
-                        do_not_move = true;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().smashing = false;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().do_not_move = true;
                         entities
                             .lock()
                             .unwrap()
@@ -959,16 +916,16 @@ fn main_loop() -> Result<(), String> {
                                 ),
                             );
                         hit_change = 0.0;
-                        w_released = false;
-                        j_released = false;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().up_released = false;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = false;
                     }
-                    j_released = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = false;
                 }
-                if j && !smashing {
-                    if !a
-                        && !d
-                        && !w
-                        && !s
+                if player_entity.hit && !player_entity.smashing {
+                    if !player_entity.up
+                        && !player_entity.down
+                        && !player_entity.left
+                        && !player_entity.right
                         && entities
                             .lock()
                             .unwrap()
@@ -992,10 +949,10 @@ fn main_loop() -> Result<(), String> {
                             );
                         hit_change = 0.0;
                     }
-                    if !a
-                        && !d
-                        && !w
-                        && !s
+                    if !player_entity.up
+                        && !player_entity.down
+                        && !player_entity.right
+                        && !player_entity.left
                         && entities
                             .lock()
                             .unwrap()
@@ -1031,7 +988,7 @@ fn main_loop() -> Result<(), String> {
                     {
                         hit_type = ActionType::Sair;
                     }
-                    if (a || d)
+                    if (player_entity.right || player_entity.left)
                         && hit_change
                             > Action::action(player_class.clone(), hit_type.clone(), 1).hit_time
                     {
@@ -1046,7 +1003,7 @@ fn main_loop() -> Result<(), String> {
                             );
                         hit_change = 0.0;
                     }
-                    if w && hit_change
+                    if player_entity.up && hit_change
                         > Action::action(player_class.clone(), ActionType::Uair, 1).hit_time
                     {
                         let mut hit_type = ActionType::Uair;
@@ -1060,9 +1017,9 @@ fn main_loop() -> Result<(), String> {
                                 Action::action(player_class.clone(), ActionType::Uair, 1),
                             );
                         hit_change = 0.0;
-                        w_released = false;
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().up_released = false;
                     }
-                    if s && entities
+                    if entities.lock().unwrap().get_mut(&player_id).unwrap().down && entities
                         .lock()
                         .unwrap()
                         .get_mut(&player_id)
@@ -1086,19 +1043,16 @@ fn main_loop() -> Result<(), String> {
                         hit_change = 0.0;
                     }
                 }
-                if !a && !d && !w {
-                    smashing = false;
-                    do_not_move = false;
+                if !player_entity.right && !player_entity.left && !player_entity.up {
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().smashing = false;
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().do_not_move = false;
                 }
                 for (id, e) in entities.lock().unwrap().iter_mut() {
                     e.tick(delta.as_millis());
                 }
 
-                for (id, e) in network_entities.lock().unwrap().iter_mut() {
-                    // e.tick(*time_from_last_packet_main.lock().unwrap());
-                }
                 let mut entities_network_clone = network_entities.lock().unwrap().clone();
-
+                let entities_clone = entities.lock().unwrap().clone();
                 for (id, e) in entities.lock().unwrap().iter_mut() {
                     for env in environment.values_mut() {
                         e.collide_with_obstacle(delta.as_millis(), env);
@@ -1106,18 +1060,16 @@ fn main_loop() -> Result<(), String> {
                     for (o_id, o_e) in entities_network_clone.iter() {
                         e.collide_with_hitboxes(delta.as_millis(), o_e);
                     }
-                }
-                /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
-                    for env in environment.values_mut() {
-                        e.collide_with(delta.as_millis(), env);
+                    for (o_id, o_e) in entities_clone.iter() {
+                        if id == &player_id {
+                            continue;
+                        }
+                        e.collide_with_hitboxes(delta.as_millis(), &o_e.get_as_network_entity());
                     }
-                }*/
+                }
                 for (id, e) in entities.lock().unwrap().iter_mut() {
                     e.execute_movement();
                 }
-                /*for (id, e) in network_entities.lock().unwrap().iter_mut() {
-                    e.execute_movement();
-                }*/
                 // draw bg
                 if SHOW_BACKGROUND {
                     let texture = &sprites.get(&Sprite::Basement).unwrap();
@@ -1371,7 +1323,7 @@ fn main_loop() -> Result<(), String> {
                         SCALE,
                     );
                 }
-                if w || space {
+                if player_entity.up || space {
                     tilt_time = TILT_TIME_UP;
                 } else {
                     tilt_time = TILT_TIME_SIDE;
@@ -1380,8 +1332,8 @@ fn main_loop() -> Result<(), String> {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
                     jump = false;
                 }
-                let p_x = entities.lock().unwrap().get_mut(&player_id).unwrap().x;
-                let p_y = entities.lock().unwrap().get_mut(&player_id).unwrap().y;
+                let p_x = player_entity.x;
+                let p_y = player_entity.y;
                 camera.move_towards_point(p_x, p_y);
                 camera.tick(delta.as_millis());
             }

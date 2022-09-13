@@ -76,11 +76,24 @@ pub struct Entity {
     pub inv_change: f32,
     pub flying: bool,
     pub jump_counter: u8,
-    pub collide_sides: bool,
     pub drop: bool,
     pub freeze: bool,
     pub walk_change: i32,
     pub walk_time: i32,
+    pub smashing: bool,
+    pub tilting: bool,
+    pub up: bool,
+    pub left: bool,
+    pub down: bool,
+    pub right: bool,
+    pub up_released: bool,
+    pub left_released: bool,
+    pub down_released: bool,
+    pub right_released: bool,
+    pub hit_released: bool,
+    pub hit: bool,
+    pub special: bool,
+    pub do_not_move: bool,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -377,18 +390,64 @@ impl Class {
         Class {}
     }
 }
+
 impl Entity {
+    pub fn new(x: f32, y:f32, current_sprite: Sprite, freeze_sprite: Sprite, current_class: ClassType, name: String) -> Entity {
+        Entity {
+            x: x,
+            y: y,
+            h: 0.0,
+            w: 0.0,
+            dx: 0.0,
+            dy: 0.0,
+            dir: true,
+            hp: 0,
+            flying: false,
+            up: false,
+            left: false,
+            down: false,
+            right: false,
+            up_released: false,
+            left_released: false,
+            down_released: false,
+            right_released: false,
+            hit_released: false,
+            special: false,
+            hit: false,
+            smashing: false,
+            tilting: false,
+            do_not_move: false,
+            next_step: (0.0, 0.0),
+            collide_directions: (false, false, false, false),
+            current_sprite: current_sprite,
+            freeze_sprite: freeze_sprite,
+            hitboxes: Vec::new(),
+            move_lock: false,
+            current_action: Action::action(current_class.clone(), ActionType::Idle, 1),
+            current_class: current_class,
+            name: name,
+            inv_change: 0.0,
+            inv_time: 1000.0,
+            jump_counter: 0,
+            drop: false,
+            freeze: false,
+            stocks: 3,
+            walk_time: 250,
+            walk_change: 0,
+        }
+    }
     pub fn tick(&mut self, delta: u128) {
         if self.stocks < 0 {
             std::process::exit(0);
         }
-        if self.current_action.action == ActionType::Idle && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1) {
+        if self.current_action.action == ActionType::Idle
+            && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1)
+        {
             self.walk_change += delta as i32;
             if self.walk_change > self.walk_time {
                 if self.current_sprite == get_sprites(self.current_class.clone(), "2".to_string()) {
                     self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
-                } else
-                {
+                } else {
                     self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
                 }
                 self.walk_change = 0;
@@ -431,13 +490,30 @@ impl Entity {
         if self.next_step.1 == 0.0 {
             self.jump_counter = 0;
         }
-        if self.y > 256.0 || self.y < -100.0 || self.x < -100.0 || self.x > 256.0 + 100.0 {
+        if self.y > 256.0 || self.y < -200.0 || self.x < -200.0 || self.x > 256.0 + 200.0 {
             self.stocks -= 1;
             self.x = 48.0;
             self.y = 0.0;
             self.hp = 0;
             self.dy = 0.0;
             self.dx = 0.0;
+        }
+        self.slow_movement();
+    }
+    pub fn slow_movement(&mut self) {
+        if self.left && !self.smashing && !self.do_not_move {
+            let acc_ratio = match self.flying {
+                true => 0.02,
+                false => 0.5,
+            };
+            self.dx = self.dx.lerp(-60.0, acc_ratio);
+        }
+        if self.right && !self.smashing && !self.do_not_move {
+            let acc_ratio = match self.flying {
+                true => 0.02,
+                false => 0.5,
+            };
+            self.dx = self.dx.lerp(60.0, acc_ratio);
         }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
