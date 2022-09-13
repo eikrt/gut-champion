@@ -30,7 +30,6 @@ use std::{
 
 const MSG_SIZE: usize = 96;
 pub fn client_threads(
-    player_id: u64,
     ip: String,
     time_from_last_packet: Arc<Mutex<u128>>,
     entities_send: Arc<Mutex<HashMap<u64, Entity>>>,
@@ -41,6 +40,7 @@ pub fn client_threads(
     client.set_nonblocking(true);
     let (tx, rx) = mpsc::channel::<SendState>();
     let (tx_state, rx_state) = mpsc::channel::<SendState>();
+    let entities_send_clone = entities_send.clone();
     thread::spawn(move || loop {
         *time_from_last_packet.lock().unwrap() = SystemTime::now()
             .duration_since(time_from_last_packet_compare)
@@ -65,18 +65,17 @@ pub fn client_threads(
                 if state_ref.player.name.is_empty() {
                     continue;
                 }
-
                 if !network_entities_thread
                     .lock()
                     .unwrap()
                     .contains_key(&state_ref.id)
-                    && state_ref.id != player_id
+                    && !entities_send_clone.lock().unwrap().contains_key(&state_ref.id)
                 {
                     network_entities_thread
                         .lock()
                         .unwrap()
                         .insert(state_ref.id, state_ref.player.clone());
-                } else if state_ref.id != player_id {
+                } else if !entities_send_clone.lock().unwrap().contains_key(&state_ref.id) {
                     *network_entities_thread
                         .lock()
                         .unwrap()
@@ -107,18 +106,14 @@ pub fn client_threads(
         //thread::sleep(::std::time::Duration::from_millis(10));
     });
     thread::spawn(move || loop {
-        let msg = SendState {
-            id: player_id,
-            player: entities_send
-                .lock()
-                .unwrap()
-                .get(&player_id)
-                .unwrap()
-                .clone()
-                .get_as_network_entity(),
-        };
-        if tx.send(msg).is_err() {
-            break;
+        for (e_id, e) in entities_send.lock().unwrap().iter() {
+            let msg = SendState {
+                id: *e_id,
+                player: e.clone().get_as_network_entity(),
+            };
+            if tx.send(msg).is_err() {
+                break;
+            }
         }
         thread::sleep(time::Duration::from_millis(32));
     });

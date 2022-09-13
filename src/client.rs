@@ -588,7 +588,6 @@ fn main_loop() -> Result<(), String> {
                                 .current_sprite =
                                 get_sprites(player_class.clone(), "1".to_string());
                             client_threads(
-                                player_id,
                                 ip.to_string(),
                                 time_from_last_packet.clone(),
                                 entities_send.clone(),
@@ -936,6 +935,7 @@ fn main_loop() -> Result<(), String> {
                         }
                     }
                 }
+                let entities_len = entities.lock().unwrap().len();
                 for (i, e) in network_entities.lock().unwrap().iter().enumerate() {
                     let hp_percentage_visual = e.1.hp as f32 / 200.0;
                     let percentage_color = Color::RGBA(
@@ -953,7 +953,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        ((i as f32 * 200.0 + 200.0) * SCALE) as i32,
+                        ((i as f32 * 200.0 + 200.0 * entities_len as f32) * SCALE) as i32,
                         (SCALE * SCREEN_HEIGHT as f32 - 128.0 * SCALE) as i32,
                     );
                     render_text(
@@ -980,7 +980,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        ((i as f32 * 200.0 + 200.0) * SCALE) as i32,
+                        ((i as f32 * 200.0 + 200.0 * entities_len as f32) * SCALE) as i32,
                         (SCALE * SCREEN_HEIGHT as f32 - 85.0 * SCALE) as i32,
                     );
                     render_text(
@@ -1000,7 +1000,7 @@ fn main_loop() -> Result<(), String> {
                     )
                     .unwrap();
                     let position = (
-                        ((i as f32 * 200.0 + 200.0) * SCALE) as i32,
+                        ((i as f32 * 200.0 + 200.0 * entities_len as f32) * SCALE) as i32,
                         ((SCREEN_HEIGHT as f32 - 40.0) * SCALE) as i32,
                     );
                     render_text(
