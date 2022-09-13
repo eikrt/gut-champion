@@ -7,6 +7,9 @@ const GRAVITY: f32 = 5.0;
 const JUMP_STRENGTH: f32 = 188.0;
 const SMASH_RATIO: f32 = 750.0;
 const ENTITY_MARGIN: f32 = 8.0;
+
+const TILT_TIME_SIDE: u128 = 186;
+const TILT_TIME_UP: u128 = 48;
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum ActionType {
     Jab,
@@ -94,6 +97,15 @@ pub struct Entity {
     pub hit: bool,
     pub special: bool,
     pub do_not_move: bool,
+    pub smash_time: i32,
+    pub smash_change: i32,
+    pub hit_change: i32,
+    pub tilt_change: i32,
+    pub tilt_time: i32,
+    pub drop_change: i32,
+    pub drop_time: i32,
+    pub freeze_change: i32,
+    pub freeze_time: i32,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -392,7 +404,14 @@ impl Class {
 }
 
 impl Entity {
-    pub fn new(x: f32, y:f32, current_sprite: Sprite, freeze_sprite: Sprite, current_class: ClassType, name: String) -> Entity {
+    pub fn new(
+        x: f32,
+        y: f32,
+        current_sprite: Sprite,
+        freeze_sprite: Sprite,
+        current_class: ClassType,
+        name: String,
+    ) -> Entity {
         Entity {
             x: x,
             y: y,
@@ -434,12 +453,37 @@ impl Entity {
             stocks: 3,
             walk_time: 250,
             walk_change: 0,
+            smash_time: 0,
+            smash_change: 0,
+            drop_change: 0,
+            drop_time: 300,
+            freeze_change: 0,
+            freeze_time: 64,
+            hit_change: 0,
+            tilt_change: 0,
+            tilt_time: TILT_TIME_SIDE as i32,
         }
     }
     pub fn tick(&mut self, delta: u128) {
         if self.stocks < 0 {
             std::process::exit(0);
         }
+
+        if self.drop {
+            self.drop_change += delta as i32;
+            if self.drop_change > self.drop_time {
+                self.drop_change = 0;
+                self.drop = false;
+            }
+        }
+        if self.freeze {
+            self.freeze_change += delta as i32;
+            if self.freeze_change > self.freeze_time {
+                self.freeze = false;
+                self.freeze_change = 0;
+            }
+        }
+        self.process_hit_actions(delta);
         if self.current_action.action == ActionType::Idle
             && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1)
         {
@@ -500,6 +544,163 @@ impl Entity {
         }
         self.slow_movement();
     }
+    pub fn process_hit_actions(&mut self, delta: u128) {
+        self.hit_change += delta as i32;
+        if self.tilting && self.hit {
+            self.smashing = true;
+        }
+        if self.smashing {
+            self.smash_change += delta as i32;
+        } else {
+            self.smash_change = 1;
+        }
+
+        if self.tilting {
+            self.tilt_change += delta as i32;
+            if self.tilt_change > self.tilt_time {
+                self.tilt_change = 0;
+                self.tilting = false;
+            }
+        }
+        if !self.left && !self.right && self.next_step.1 == 0.0 || self.smashing {
+            let slow_ratio = match self.flying {
+                true => 0.87,
+                false => 0.87,
+            };
+            self.dx -= self.dx.lerp(0.0, slow_ratio);
+        }
+        if self.hit_released {
+            if (self.left || self.right)
+                && self.hit_change
+                    > Action::action(
+                        self.current_class.clone(),
+                        ActionType::SideSmash,
+                        self.smash_change.try_into().unwrap(),
+                    )
+                    .hit_time as i32
+                && self.smashing
+            {
+                let hit_type = ActionType::SideSmash;
+                self.smashing = false;
+                self.do_not_move = true;
+
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, self.smash_change.try_into().unwrap()),
+                );
+                self.hit_change = 0;
+                self.hit_released = false;
+            }
+            if self.up
+                && self.hit_change
+                    > Action::action(
+                        self.current_class.clone(),
+                        ActionType::UpSmash,
+                        self.smash_change.try_into().unwrap(),
+                    )
+                    .hit_time as i32
+                && self.smashing
+            {
+                let mut hit_type = ActionType::UpSmash;
+                hit_type = ActionType::UpSmash;
+                self.smashing = false;
+                self.do_not_move = true;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, self.smash_change.try_into().unwrap()),
+                );
+                self.hit_change = 0;
+                self.up_released = false;
+                self.hit_released = false;
+            }
+            self.hit_released = false;
+        }
+
+        if self.hit && !self.smashing {
+            if !self.up
+                && !self.down
+                && !self.left
+                && !self.right
+                && self.next_step.1 == 0.0
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Jab, 1).hit_time as i32
+            {
+                let mut hit_type = ActionType::Jab;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, 1),
+                );
+                self.hit_change = 0;
+            }
+            if !self.up
+                && !self.down
+                && !self.right
+                && !self.left
+                && self.next_step.1 != 0.0
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Nair, 1).hit_time
+                        as i32
+            {
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), ActionType::Nair, 1),
+                );
+                self.hit_change = 0;
+            }
+
+            let mut hit_type = ActionType::Slide;
+            if self.next_step.1 != 0.0 {
+                hit_type = ActionType::Sair;
+            }
+            if (self.right || self.left)
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), hit_type.clone(), 1).hit_time
+                        as i32
+            {
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, 1),
+                );
+                self.hit_change = 0;
+            }
+            if self.up
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Uair, 1).hit_time
+                        as i32
+            {
+                let mut hit_type = ActionType::Uair;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), ActionType::Uair, 1),
+                );
+                self.hit_change = 0;
+                self.up_released = false;
+            }
+            if self.down
+                && self.next_step.1 > 0.0
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Dair, 1).hit_time
+                        as i32
+            {
+                let mut hit_type = ActionType::Dair;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, 1),
+                );
+                self.hit_change = 0;
+            }
+        }
+        if !self.right && !self.left && !self.up {
+            self.smashing = false;
+            self.do_not_move = false;
+        }
+
+        if self.up {
+            self.tilt_time = TILT_TIME_UP as i32;
+        } else {
+            self.tilt_time = TILT_TIME_SIDE as i32;
+        }
+    }
     pub fn slow_movement(&mut self) {
         if self.left && !self.smashing && !self.do_not_move {
             let acc_ratio = match self.flying {
@@ -508,12 +709,16 @@ impl Entity {
             };
             self.dx = self.dx.lerp(-60.0, acc_ratio);
         }
-        if self.right && !self.smashing && !self.do_not_move {
+        else if self.right && !self.smashing && !self.do_not_move {
             let acc_ratio = match self.flying {
                 true => 0.02,
                 false => 0.5,
             };
             self.dx = self.dx.lerp(60.0, acc_ratio);
+        }
+        else if !self.flying{
+
+            self.dx = self.dx.lerp(0.0, 0.2);
         }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {

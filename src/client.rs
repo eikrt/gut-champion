@@ -44,8 +44,6 @@ const STATUS_PERCENTAGE_COLOR: Color = Color::RGBA(255, 255, 195, 255);
 const NEUTRAL_COLOR: Color = Color::RGBA(255, 255, 195, 255);
 const HOVERED_COLOR: Color = Color::RGBA(255, 155, 95, 255);
 const PRESSED_COLOR: Color = Color::RGBA(255, 55, 55, 255);
-const TILT_TIME_SIDE: u128 = 186;
-const TILT_TIME_UP: u128 = 48;
 const CONF_PATH: &str = "./conf/conf";
 #[derive(PartialEq)]
 enum MenuState {
@@ -107,9 +105,6 @@ fn main_loop() -> Result<(), String> {
     let tile_color = Color::RGB(128, 64, 55);
     let floor_color = Color::RGB(64, 32, 30);
     let player_color = Color::RGB(128, 128, 0);
-    let mut hit_change = 0.0;
-    let mut drop_change = 0;
-    let mut drop_time = 300;
     let sprites = HashMap::from([
         (
             Sprite::Commodore,
@@ -363,8 +358,6 @@ fn main_loop() -> Result<(), String> {
     ];
     let mut tilt_change = 0;
     let mut tilt_time = 186;
-    let mut tilting = false;
-    let mut smashing = false;
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([
         (
             player_id,
@@ -448,8 +441,6 @@ fn main_loop() -> Result<(), String> {
     let mut space = false;
     let mut do_not_move = false;
     let mut smash_change = 0;
-    let mut freeze_change = 0;
-    let mut freeze_time = 64;
     let mut running = true;
     let mut jump = false;
     let mut event_pump = sdl_context.event_pump()?;
@@ -486,23 +477,8 @@ fn main_loop() -> Result<(), String> {
                 entities.lock().unwrap().get_mut(&player_id).unwrap().dx = -60.0;
             }
         }
-        if player_entity.drop {
-            drop_change += delta.as_millis();
-            if drop_change > drop_time {
-                drop_change = 0;
-                entities.lock().unwrap().get_mut(&player_id).unwrap().drop = false;
-            }
-        }
-        if player_entity.freeze {
-            freeze_change += delta.as_millis();
-            if freeze_change > freeze_time {
-                entities.lock().unwrap().get_mut(&player_id).unwrap().freeze = false;
-                freeze_change = 0;
-            }
-        }
         canvas.set_draw_color(bg_color);
         canvas.clear();
-        hit_change += delta.as_millis() as f32;
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -528,7 +504,7 @@ fn main_loop() -> Result<(), String> {
                                 .1
                                 == 0.0
                         {
-                            tilting = true;
+                            entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = true;
 
                             do_not_move = false;
                         }
@@ -556,7 +532,7 @@ fn main_loop() -> Result<(), String> {
                                 .1
                                 == 0.0
                         {
-                            tilting = true;
+                            entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = true;
                             do_not_move = false;
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
@@ -659,7 +635,7 @@ fn main_loop() -> Result<(), String> {
                                 .1
                                 == 0.0
                         {
-                            tilting = true;
+                            entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = true;
                             do_not_move = false;
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
@@ -834,219 +810,9 @@ fn main_loop() -> Result<(), String> {
                 }
             }
             MenuState::Game => {
-                if player_entity.tilting && player_entity.hit {
-                    smashing = true;
-                }
-                if player_entity.smashing {
-                    smash_change += delta.as_millis();
-                } else {
-                    smash_change = 1;
-                }
                 canvas.set_draw_color(bg_color);
                 canvas.clear();
 
-                for (id, e) in entities.lock().unwrap().iter_mut() {}
-                if player_entity.tilting {
-                    tilt_change += delta.as_millis();
-                    if tilt_change > tilt_time {
-                        tilt_change = 0;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = false;
-                    }
-                }
-                let next_step_y = entities
-                    .lock()
-                    .unwrap()
-                    .get_mut(&player_id)
-                    .unwrap()
-                    .next_step
-                    .1;
-                if !player_entity.left && !player_entity.right && next_step_y == 0.0 || smashing {
-                    let slow_ratio = match player_entity.flying
-                    {
-                        true => 0.87,
-                        false => 0.87,
-                    };
-                    let dx = player_entity.dx;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().dx -=
-                        dx.lerp(0.0, slow_ratio);
-                }
-                if player_entity.hit_released {
-                    if (player_entity.left || player_entity.right)
-                        && hit_change
-                            > Action::action(player_class.clone(), ActionType::Slide, smash_change)
-                                .hit_time
-                        && smashing
-                    {
-                        let hit_type = ActionType::SideSmash;
-                        smashing = false;
-                        do_not_move = true;
-
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(player_class.clone(), hit_type, smash_change),
-                            );
-                        hit_change = 0.0;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = false;
-                    }
-                    if player_entity.up && hit_change
-                        > Action::action(player_class.clone(), ActionType::UpSmash, smash_change)
-                            .hit_time
-                        && player_entity.smashing
-                    {
-                        let mut hit_type = ActionType::UpSmash;
-                        hit_type = ActionType::UpSmash;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().smashing = false;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().do_not_move = true;
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(
-                                    player_class.clone(),
-                                    ActionType::UpSmash,
-                                    smash_change,
-                                ),
-                            );
-                        hit_change = 0.0;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().up_released = false;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = false;
-                    }
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = false;
-                }
-                if player_entity.hit && !player_entity.smashing {
-                    if !player_entity.up
-                        && !player_entity.down
-                        && !player_entity.left
-                        && !player_entity.right
-                        && entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .next_step
-                            .1
-                            == 0.0
-                        && hit_change
-                            > Action::action(player_class.clone(), ActionType::Jab, 1).hit_time
-                    {
-                        let mut hit_type = ActionType::Jab;
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(player_class.clone(), hit_type, 1),
-                            );
-                        hit_change = 0.0;
-                    }
-                    if !player_entity.up
-                        && !player_entity.down
-                        && !player_entity.right
-                        && !player_entity.left
-                        && entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .next_step
-                            .1
-                            != 0.0
-                        && hit_change
-                            > Action::action(player_class.clone(), ActionType::Nair, 1).hit_time
-                    {
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(player_class.clone(), ActionType::Nair, 1),
-                            );
-                        hit_change = 0.0;
-                    }
-
-                    let mut hit_type = ActionType::Slide;
-                    if entities
-                        .lock()
-                        .unwrap()
-                        .get_mut(&player_id)
-                        .unwrap()
-                        .next_step
-                        .1
-                        != 0.0
-                    {
-                        hit_type = ActionType::Sair;
-                    }
-                    if (player_entity.right || player_entity.left)
-                        && hit_change
-                            > Action::action(player_class.clone(), hit_type.clone(), 1).hit_time
-                    {
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(player_class.clone(), hit_type, 1),
-                            );
-                        hit_change = 0.0;
-                    }
-                    if player_entity.up && hit_change
-                        > Action::action(player_class.clone(), ActionType::Uair, 1).hit_time
-                    {
-                        let mut hit_type = ActionType::Uair;
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(player_class.clone(), ActionType::Uair, 1),
-                            );
-                        hit_change = 0.0;
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().up_released = false;
-                    }
-                    if entities.lock().unwrap().get_mut(&player_id).unwrap().down && entities
-                        .lock()
-                        .unwrap()
-                        .get_mut(&player_id)
-                        .unwrap()
-                        .next_step
-                        .1
-                        > 0.0
-                        && hit_change
-                            > Action::action(player_class.clone(), ActionType::Dair, 1).hit_time
-                    {
-                        let mut hit_type = ActionType::Dair;
-                        entities
-                            .lock()
-                            .unwrap()
-                            .get_mut(&player_id)
-                            .unwrap()
-                            .execute_action(
-                                delta.as_millis(),
-                                Action::action(player_class.clone(), hit_type, 1),
-                            );
-                        hit_change = 0.0;
-                    }
-                }
-                if !player_entity.right && !player_entity.left && !player_entity.up {
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().smashing = false;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().do_not_move = false;
-                }
                 for (id, e) in entities.lock().unwrap().iter_mut() {
                     e.tick(delta.as_millis());
                 }
@@ -1323,12 +1089,7 @@ fn main_loop() -> Result<(), String> {
                         SCALE,
                     );
                 }
-                if player_entity.up || space {
-                    tilt_time = TILT_TIME_UP;
-                } else {
-                    tilt_time = TILT_TIME_SIDE;
-                }
-                if jump && !smashing && !do_not_move {
+                if jump && !player_entity.smashing && !do_not_move {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().jump();
                     jump = false;
                 }
