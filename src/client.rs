@@ -37,7 +37,7 @@ const RESOLUTION_X: u32 = 256;
 const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
-const SHOW_HITBOXES: bool = false;
+const SHOW_HITBOXES: bool = true;
 const SHOW_BACKGROUND: bool = true;
 const STATUS_FONT_SIZE: u16 = 200;
 const STATUS_PERCENTAGE_COLOR: Color = Color::RGBA(255, 255, 195, 255);
@@ -368,6 +368,11 @@ fn main_loop() -> Result<(), String> {
                 get_sprites(player_class.clone(), "freeze".to_string()),
                 player_class.clone(),
                 "Player".to_string(),
+                false,
+                7.0,
+                8.0,
+                8.0,
+                12.0,
             ),
         ),
         (
@@ -379,6 +384,11 @@ fn main_loop() -> Result<(), String> {
                 get_sprites(player_class.clone(), "freeze".to_string()),
                 player_class.clone(),
                 "Bot".to_string(),
+                true,
+                4.0,
+                0.0,
+                8.0,
+                12.0,
             ),
         ),
     ])));
@@ -504,7 +514,12 @@ fn main_loop() -> Result<(), String> {
                                 .1
                                 == 0.0
                         {
-                            entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = true;
+                            entities
+                                .lock()
+                                .unwrap()
+                                .get_mut(&player_id)
+                                .unwrap()
+                                .tilting = true;
 
                             do_not_move = false;
                         }
@@ -532,7 +547,12 @@ fn main_loop() -> Result<(), String> {
                                 .1
                                 == 0.0
                         {
-                            entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = true;
+                            entities
+                                .lock()
+                                .unwrap()
+                                .get_mut(&player_id)
+                                .unwrap()
+                                .tilting = true;
                             do_not_move = false;
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
@@ -560,7 +580,12 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::K),
                     ..
                 } => {
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().special = true;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .special = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
@@ -634,7 +659,12 @@ fn main_loop() -> Result<(), String> {
                                 .1
                                 == 0.0
                         {
-                            entities.lock().unwrap().get_mut(&player_id).unwrap().tilting = true;
+                            entities
+                                .lock()
+                                .unwrap()
+                                .get_mut(&player_id)
+                                .unwrap()
+                                .tilting = true;
                             do_not_move = false;
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
@@ -648,35 +678,60 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().up = false;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().up_released = true;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .up_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().left = false;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().left_released = true;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .left_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::S),
                     ..
                 } => {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().down = false;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().down_released = true;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .down_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::D),
                     ..
                 } => {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().right = false;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().right_released = true;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .right_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::J),
                     ..
                 } => {
                     entities.lock().unwrap().get_mut(&player_id).unwrap().hit = false;
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().hit_released = true;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .hit_released = true;
                 }
                 Event::KeyUp {
                     keycode: Some(Keycode::Space),
@@ -688,7 +743,12 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::K),
                     ..
                 } => {
-                    entities.lock().unwrap().get_mut(&player_id).unwrap().special = false;
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .special = false;
                 }
                 _ => {}
             }
@@ -712,16 +772,6 @@ fn main_loop() -> Result<(), String> {
                     let texture = &sprites.get(&b.main_sprite).unwrap();
                     b.w = texture.query().width as i32;
                     b.h = texture.query().height as i32;
-                    /*canvas.copy(
-                        texture,
-                        Rect::new(0, 0, texture.query().width, texture.query().height),
-                        Rect::new(
-                            (b.x as f32 * SCALE as f32) as i32,
-                            (b.y as f32 * SCALE as f32) as i32 - (2.0 * SCALE) as i32,
-                            texture.query().width * SCALE as u32,
-                            texture.query().height * SCALE as u32,
-                        ),
-                    )?;*/
 
                     let text_color = match b.hovered {
                         true => match b.pressed {
@@ -768,16 +818,6 @@ fn main_loop() -> Result<(), String> {
                     let texture = &sprites.get(&b.main_sprite).unwrap();
                     b.w = texture.query().width as i32;
                     b.h = texture.query().height as i32;
-                    /*canvas.copy(
-                        texture,
-                        Rect::new(0, 0, texture.query().width, texture.query().height),
-                        Rect::new(
-                            (b.x as f32 * SCALE as f32) as i32,
-                            (b.y as f32 * SCALE as f32) as i32 - (2.0 * SCALE) as i32,
-                            texture.query().width * SCALE as u32,
-                            texture.query().height * SCALE as u32,
-                        ),
-                    )?;*/
 
                     let text_color = match b.hovered {
                         true => match b.pressed {
@@ -813,6 +853,9 @@ fn main_loop() -> Result<(), String> {
                 canvas.clear();
 
                 for (id, e) in entities.lock().unwrap().iter_mut() {
+                    if id != &player_id {
+                        e.target_entity = Some(Box::new(player_entity.clone()));
+                    }
                     e.tick(delta.as_millis());
                 }
 
@@ -826,7 +869,7 @@ fn main_loop() -> Result<(), String> {
                         e.collide_with_hitboxes(delta.as_millis(), o_e);
                     }
                     for (o_id, o_e) in entities_clone.iter() {
-                        if id == &player_id {
+                        if id == o_id {
                             continue;
                         }
                         e.collide_with_hitboxes(delta.as_millis(), &o_e.get_as_network_entity());
@@ -903,6 +946,15 @@ fn main_loop() -> Result<(), String> {
                     }
                 }
 
+                if SHOW_HITBOXES {
+                    canvas.set_draw_color(Color::RGB(255, 130, 210));
+                    canvas.draw_rect(Rect::new(
+                        ((-camera.x + player_entity.x + player_entity.h_x) as f32 * SCALE) as i32,
+                        ((-camera.y + player_entity.y + player_entity.h_y) as f32 * SCALE) as i32,
+                        (player_entity.h_w as f32 * SCALE) as u32,
+                        (player_entity.h_h as f32 * SCALE) as u32,
+                    ));
+                }
                 for (id, e) in network_entities.lock().unwrap().iter_mut() {
                     if !&sprites.contains_key(&e.current_sprite) {
                         continue;

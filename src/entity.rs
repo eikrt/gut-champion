@@ -11,6 +11,13 @@ const ENTITY_MARGIN: f32 = 8.0;
 const TILT_TIME_SIDE: u128 = 186;
 const TILT_TIME_UP: u128 = 48;
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct EntityHitbox {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub enum ActionType {
     Jab,
     Nair,
@@ -106,6 +113,12 @@ pub struct Entity {
     pub drop_time: i32,
     pub freeze_change: i32,
     pub freeze_time: i32,
+    pub ai_controlled: bool,
+    pub target_entity: Option<Box<Entity>>,
+    pub h_x: f32,
+    pub h_y: f32,
+    pub h_w: f32,
+    pub h_h: f32,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -117,10 +130,6 @@ impl AsNetworkEntity for Entity {
             hp: self.hp,
             dir: self.dir,
             stocks: self.stocks,
-            //h: self.h,
-            // w: self.w,
-            //next_step: self.next_step,
-            // collide_directions: self.collide_directions,
             hitboxes: self
                 .hitboxes
                 .clone()
@@ -411,6 +420,11 @@ impl Entity {
         freeze_sprite: Sprite,
         current_class: ClassType,
         name: String,
+        ai_controlled: bool,
+        h_x: f32,
+        h_y: f32,
+        h_w: f32,
+        h_h: f32,
     ) -> Entity {
         Entity {
             x: x,
@@ -462,12 +476,41 @@ impl Entity {
             hit_change: 0,
             tilt_change: 0,
             tilt_time: TILT_TIME_SIDE as i32,
+            ai_controlled: ai_controlled,
+            target_entity: None,
+            h_x: h_x,
+            h_y: h_y,
+            h_w: h_w,
+            h_h: h_h,
         }
     }
-    pub fn tick(&mut self, delta: u128) {
-        if self.stocks < 0 {
-            std::process::exit(0);
+    pub fn ai_tick(&mut self, delta: u128) {
+        let t_e = self.target_entity.as_ref().unwrap();
+        if self.x > t_e.x + 16.0 {
+            self.left = true;
+            self.right = false;
+            self.dir = false;
+        } else if self.x < t_e.x - 16.0 {
+            self.right = true;
+            self.left = false;
+            self.dir = true;
+        } else {
+            self.right = false;
+            self.left = false;
         }
+        if self.y < t_e.y {
+            self.drop = true;
+        }
+        if self.y > t_e.y && self.next_step.1 >= 0.0 {
+            self.jump();
+        }
+        self.hit = true;
+    }
+    pub fn tick(&mut self, delta: u128) {
+        if self.ai_controlled {
+            self.ai_tick(delta);
+        }
+        if self.stocks < 0 {}
 
         if self.drop {
             self.drop_change += delta as i32;
@@ -535,7 +578,9 @@ impl Entity {
         if self.next_step.1 == 0.0 {
             self.jump_counter = 0;
         }
-        if self.y > 256.0 || self.y < -200.0 || self.x < -200.0 || self.x > 256.0 + 200.0 {
+        if self.stocks > 1
+            && (self.y > 256.0 || self.y < -200.0 || self.x < -200.0 || self.x > 256.0 + 200.0)
+        {
             self.stocks -= 1;
             self.x = 48.0;
             self.y = 0.0;
@@ -579,7 +624,11 @@ impl Entity {
 
                 self.execute_action(
                     delta,
-                    Action::action(self.current_class.clone(), hit_type, self.smash_change.try_into().unwrap()),
+                    Action::action(
+                        self.current_class.clone(),
+                        hit_type,
+                        self.smash_change.try_into().unwrap(),
+                    ),
                 );
                 self.hit_change = 0;
                 self.hit_released = false;
@@ -600,7 +649,11 @@ impl Entity {
                 self.do_not_move = true;
                 self.execute_action(
                     delta,
-                    Action::action(self.current_class.clone(), hit_type, self.smash_change.try_into().unwrap()),
+                    Action::action(
+                        self.current_class.clone(),
+                        hit_type,
+                        self.smash_change.try_into().unwrap(),
+                    ),
                 );
                 self.hit_change = 0;
                 self.up_released = false;
@@ -701,16 +754,13 @@ impl Entity {
                 false => 0.5,
             };
             self.dx = self.dx.lerp(-60.0, acc_ratio);
-        }
-        else if self.right && !self.smashing && !self.do_not_move {
+        } else if self.right && !self.smashing && !self.do_not_move {
             let acc_ratio = match self.flying {
                 true => 0.02,
                 false => 0.5,
             };
             self.dx = self.dx.lerp(60.0, acc_ratio);
-        }
-        else if !self.flying && self.next_step.1 == 0.0 {
-
+        } else if !self.flying && self.next_step.1 == 0.0 {
             self.dx = self.dx.lerp(0.0, 0.2);
         }
     }
@@ -828,10 +878,10 @@ impl Entity {
     }
     pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
         for hitbox in &other.hitboxes {
-            if self.x < hitbox.x as f32 + hitbox.w as f32
-                && self.x + self.w > hitbox.x as f32
-                && self.y < hitbox.y as f32 + hitbox.h as f32
-                && self.y + self.h > hitbox.y as f32
+            if self.x + self.h_x < hitbox.x as f32 + hitbox.w as f32
+                && self.x + self.h_x + self.h_w > hitbox.x as f32
+                && self.y + self.h_y < hitbox.y as f32 + hitbox.h as f32
+                && self.y + self.h_y + self.h_h > hitbox.y as f32
             {
                 self.take_hit(delta, &hitbox);
             }
