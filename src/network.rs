@@ -29,16 +29,13 @@ pub struct NetworkEntity {
     pub y: f32,
     pub dx: f32,
     pub dy: f32,
-    //pub w: f32,
-    //pub h: f32,
-    //pub next_step: (f32,f32),
+    pub shield_percentage: f32,
     pub hp: i32,
     pub stocks: i32,
     pub dir: bool,
     pub hitboxes: Vec<NetworkBare>,
     pub name: String,
     pub current_sprite: Sprite,
-    //pub collide_directions: (bool, bool, bool, bool),
 }
 impl NetworkEntity {
     pub fn tick(&mut self, delta: u128) {

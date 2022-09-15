@@ -77,6 +77,8 @@ pub struct Entity {
     pub collide_directions: (bool, bool, bool, bool),
     pub current_sprite: Sprite,
     pub freeze_sprite: Sprite,
+    pub stunned_sprite: Sprite,
+    pub shield_sprite: Sprite,
     pub hitboxes: Vec<HitBox>,
     pub move_lock: bool,
     pub current_action: Action,
@@ -88,6 +90,7 @@ pub struct Entity {
     pub jump_counter: u8,
     pub drop: bool,
     pub freeze: bool,
+    pub stunned: bool,
     pub walk_change: i32,
     pub walk_time: i32,
     pub smashing: bool,
@@ -103,6 +106,7 @@ pub struct Entity {
     pub hit_released: bool,
     pub hit: bool,
     pub special: bool,
+    pub shield: bool,
     pub do_not_move: bool,
     pub smash_time: i32,
     pub smash_change: i32,
@@ -113,6 +117,10 @@ pub struct Entity {
     pub drop_time: i32,
     pub freeze_change: i32,
     pub freeze_time: i32,
+    pub stun_change: i32,
+    pub stun_time: i32,
+    pub shield_change: i32,
+    pub shield_time: i32,
     pub ai_controlled: bool,
     pub target_entity: Option<Box<Entity>>,
     pub h_x: f32,
@@ -128,6 +136,7 @@ impl AsNetworkEntity for Entity {
             dx: self.dx,
             dy: self.dy,
             hp: self.hp,
+            shield_percentage: self.shield_change as f32 / self.shield_time as f32,
             dir: self.dir,
             stocks: self.stocks,
             hitboxes: self
@@ -141,6 +150,540 @@ impl AsNetworkEntity for Entity {
         }
     }
 }
+impl Entity {
+    pub fn new(
+        x: f32,
+        y: f32,
+        current_sprite: Sprite,
+        freeze_sprite: Sprite,
+        stunned_sprite: Sprite,
+        shield_sprite: Sprite,
+        current_class: ClassType,
+        name: String,
+        ai_controlled: bool,
+        h_x: f32,
+        h_y: f32,
+        h_w: f32,
+        h_h: f32,
+    ) -> Entity {
+        Entity {
+            x: x,
+            y: y,
+            h: 0.0,
+            w: 0.0,
+            dx: 0.0,
+            dy: 0.0,
+            dir: true,
+            hp: 0,
+            flying: false,
+            up: false,
+            left: false,
+            down: false,
+            right: false,
+            up_released: false,
+            left_released: false,
+            down_released: false,
+            right_released: false,
+            hit_released: false,
+            special: false,
+            hit: false,
+            shield: false,
+            smashing: false,
+            tilting: false,
+            stunned: false,
+            do_not_move: false,
+            next_step: (0.0, 0.0),
+            collide_directions: (false, false, false, false),
+            current_sprite: current_sprite,
+            freeze_sprite: freeze_sprite,
+            stunned_sprite: stunned_sprite,
+            shield_sprite: shield_sprite,
+            hitboxes: Vec::new(),
+            move_lock: false,
+            current_action: Action::action(current_class.clone(), ActionType::Idle, 1),
+            current_class: current_class,
+            name: name,
+            inv_change: 0.0,
+            inv_time: 1000.0,
+            jump_counter: 0,
+            drop: false,
+            freeze: false,
+            stocks: 3,
+            walk_time: 250,
+            walk_change: 0,
+            smash_time: 0,
+            smash_change: 0,
+            drop_change: 0,
+            drop_time: 300,
+            freeze_change: 0,
+            freeze_time: 64,
+            stun_change: 0,
+            stun_time: 3000,
+            hit_change: 0,
+            tilt_change: 0,
+            shield_time: 2000,
+            shield_change: 0,
+            tilt_time: TILT_TIME_SIDE as i32,
+            ai_controlled: ai_controlled,
+            target_entity: None,
+            h_x: h_x,
+            h_y: h_y,
+            h_w: h_w,
+            h_h: h_h,
+        }
+    }
+    pub fn ai_tick(&mut self, delta: u128) {
+        let t_e = self.target_entity.as_ref().unwrap();
+        if self.x > t_e.x + 8.0 {
+            self.left = true;
+            self.right = false;
+            self.dir = false;
+        } else if self.x < t_e.x - 8.0 {
+            self.right = true;
+            self.left = false;
+            self.dir = true;
+        } else {
+            self.right = false;
+            self.left = false;
+        }
+        if self.y < t_e.y {
+            self.drop = true;
+        }
+        if self.y > t_e.y && self.next_step.1 >= 0.0 {
+            self.jump();
+        }
+        self.hit = true;
+    }
+    pub fn tick(&mut self, delta: u128) {
+        if self.ai_controlled {
+            self.ai_tick(delta);
+        }
+
+        if self.drop {
+            self.drop_change += delta as i32;
+            if self.drop_change > self.drop_time {
+                self.drop_change = 0;
+                self.drop = false;
+            }
+        }
+        if self.freeze {
+            self.freeze_change += delta as i32;
+            if self.freeze_change > self.freeze_time {
+                self.freeze = false;
+                self.freeze_change = 0;
+            }
+        }
+        if self.stunned {
+            self.stun_change += delta as i32;
+            if self.stun_change > self.stun_time {
+                self.stunned = false;
+                self.stun_change = 0;
+            }
+        }
+        self.accel_movement();
+        self.process_hit_actions(delta);
+        if self.current_action.action == ActionType::Idle
+            && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1)
+        {
+            self.walk_change += delta as i32;
+            if self.walk_change > self.walk_time {
+                if self.current_sprite == get_sprites(self.current_class.clone(), "2".to_string()) {
+                    self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                } else {
+                    self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
+                }
+                self.walk_change = 0;
+            }
+        } else {
+            self.current_sprite = get_animations(
+                self.current_class.clone().clone(),
+                self.current_action.action.clone(),
+            );
+        }
+        if self.freeze {
+            self.current_sprite = self.freeze_sprite.clone();
+        }
+        if self.stunned {
+            self.current_sprite = self.stunned_sprite.clone();
+        }
+        self.inv_change += delta as f32;
+        for hitbox in &mut self.hitboxes {
+            let mut h_x = self.x;
+            let mut h_y = self.y + self.current_action.y;
+            if self.dir {
+                h_x += self.current_action.x + self.w
+            } else {
+                h_x -= self.current_action.w + self.current_action.x;
+            }
+            hitbox.x = h_x;
+            hitbox.y = h_y;
+        }
+        self.dy += GRAVITY;
+        self.calculate_step(delta);
+        for hitbox in &mut self.hitboxes {
+            hitbox.change += delta as f32;
+            if hitbox.change > hitbox.duration {
+                self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                hitbox.active = false;
+                self.move_lock = false;
+            }
+        }
+        self.hitboxes.retain(|h| h.active);
+        if self.hitboxes.len() == 0 {
+            self.current_action.action = ActionType::Idle;
+        }
+        if self.next_step.1 == 0.0 {
+            self.jump_counter = 0;
+        }
+        if self.stocks > 1
+            && (self.y > 256.0 || self.y < -200.0 || self.x < -200.0 || self.x > 256.0 + 200.0)
+        {
+            self.die();
+        }
+    }
+    pub fn die(&mut self) {
+
+            self.stocks -= 1;
+            self.x = 48.0;
+            self.y = 0.0;
+            self.hp = 0;
+            self.dy = 0.0;
+            self.dx = 0.0;
+            self.stunned = false;
+            self.stun_change = 0;
+            self.freeze_change = 0;
+            self.freeze = false;
+    }
+    pub fn process_hit_actions(&mut self, delta: u128) {
+        if self.shield {
+            self.shield_change += delta as i32;
+            if self.shield_change > self.shield_time {
+                self.shield_change = 0;
+                self.shield = false;
+                self.stunned = true;
+            }
+        } else {
+            if self.shield_change > 0 {
+                self.shield_change -= delta as i32;
+            }
+        }
+        self.hit_change += delta as i32;
+        if self.tilting && self.hit {
+            self.smashing = true;
+        }
+        if self.smashing {
+            self.smash_change += delta as i32;
+        } else {
+            self.smash_change = 1;
+        }
+
+        if self.tilting {
+            self.tilt_change += delta as i32;
+            if self.tilt_change > self.tilt_time {
+                self.tilt_change = 0;
+                self.tilting = false;
+            }
+        }
+        if self.hit_released {
+            if (self.left || self.right)
+                && self.hit_change
+                    > Action::action(
+                        self.current_class.clone(),
+                        ActionType::SideSmash,
+                        self.smash_change.try_into().unwrap(),
+                    )
+                    .hit_time as i32
+                && self.smashing
+            {
+                let hit_type = ActionType::SideSmash;
+                self.smashing = false;
+                self.do_not_move = true;
+
+                self.execute_action(
+                    delta,
+                    Action::action(
+                        self.current_class.clone(),
+                        hit_type,
+                        self.smash_change.try_into().unwrap(),
+                    ),
+                );
+                self.hit_change = 0;
+                self.hit_released = false;
+            }
+            if self.up
+                && self.hit_change
+                    > Action::action(
+                        self.current_class.clone(),
+                        ActionType::UpSmash,
+                        self.smash_change.try_into().unwrap(),
+                    )
+                    .hit_time as i32
+                && self.smashing
+            {
+                let mut hit_type = ActionType::UpSmash;
+                hit_type = ActionType::UpSmash;
+                self.smashing = false;
+                self.do_not_move = true;
+                self.execute_action(
+                    delta,
+                    Action::action(
+                        self.current_class.clone(),
+                        hit_type,
+                        self.smash_change.try_into().unwrap(),
+                    ),
+                );
+                self.hit_change = 0;
+                self.up_released = false;
+                self.hit_released = false;
+            }
+            self.hit_released = false;
+        }
+
+        if self.hit && !self.smashing {
+            if !self.up
+                && !self.down
+                && !self.left
+                && !self.right
+                && self.next_step.1 == 0.0
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Jab, 1).hit_time as i32
+            {
+                let mut hit_type = ActionType::Jab;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, 1),
+                );
+                self.hit_change = 0;
+            }
+            if !self.up
+                && !self.down
+                && !self.right
+                && !self.left
+                && self.next_step.1 != 0.0
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Nair, 1).hit_time
+                        as i32
+            {
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), ActionType::Nair, 1),
+                );
+                self.hit_change = 0;
+            }
+
+            let mut hit_type = ActionType::Slide;
+            if self.next_step.1 != 0.0 {
+                hit_type = ActionType::Sair;
+            }
+            if (self.right || self.left)
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), hit_type.clone(), 1).hit_time
+                        as i32
+            {
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, 1),
+                );
+                self.hit_change = 0;
+            }
+            if self.up
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Uair, 1).hit_time
+                        as i32
+            {
+                let mut hit_type = ActionType::Uair;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), ActionType::Uair, 1),
+                );
+                self.hit_change = 0;
+                self.up_released = false;
+            }
+            if self.down
+                && self.next_step.1 > 0.0
+                && self.hit_change
+                    > Action::action(self.current_class.clone(), ActionType::Dair, 1).hit_time
+                        as i32
+            {
+                let mut hit_type = ActionType::Dair;
+                self.execute_action(
+                    delta,
+                    Action::action(self.current_class.clone(), hit_type, 1),
+                );
+                self.hit_change = 0;
+            }
+        }
+        if !self.right && !self.left && !self.up {
+            self.smashing = false;
+            self.do_not_move = false;
+        }
+
+        if self.up {
+            self.tilt_time = TILT_TIME_UP as i32;
+        } else {
+            self.tilt_time = TILT_TIME_SIDE as i32;
+        }
+    }
+    pub fn release_shield(&mut self) {
+        self.shield = false;
+    }
+    pub fn accel_movement(&mut self) {
+        if self.stunned {
+            self.shield_change = 0;
+            if self.next_step.1 == 0.0 {
+                self.dx = 0.0;
+            }
+            return;
+        }
+        if self.left && !self.smashing && !self.do_not_move {
+            let acc_ratio = match self.flying {
+                true => 0.02,
+                false => 0.5,
+            };
+            self.dx = self.dx.lerp(-60.0, acc_ratio);
+        } else if self.right && !self.smashing && !self.do_not_move {
+            let acc_ratio = match self.flying {
+                true => 0.02,
+                false => 0.5,
+            };
+            self.dx = self.dx.lerp(60.0, acc_ratio);
+        } else if !self.flying && self.next_step.1 == 0.0 {
+            self.dx = self.dx.lerp(0.0, 0.2);
+        }
+    }
+    pub fn execute_action(&mut self, delta: u128, action: Action) {
+        if self.freeze {
+            return;
+        }
+        self.current_action = action.clone();
+        let mut h_x = self.x;
+        let mut h_y = self.y + action.y;
+        if self.dir {
+            h_x += action.x + self.w
+        } else {
+            h_x -= action.w + action.x;
+        }
+        self.hitboxes.push(HitBox {
+            x: h_x,
+            y: h_y,
+            w: action.w,
+            h: action.h,
+            dir: self.dir,
+            duration: action.duration,
+            change: 0.0,
+            active: true,
+            action: action,
+        });
+        self.move_lock = true;
+    }
+    pub fn take_hit(&mut self, delta: u128, hitbox: &NetworkBare) {
+        if !hitbox.active {
+            return;
+        }
+        if self.inv_change < self.inv_time {
+            return;
+        }
+
+        if self.shield {
+            self.shield_change += 20;
+            return;
+        }
+        self.freeze = true;
+        let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
+        let hit_multiplier = 1.0 + self.hp as f32 / 90.0;
+        let hit_multiplier_knock = 3.0 + self.hp as f32 / 10.0;
+        if hitbox.dir {
+            self.dx += 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
+            self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
+            self.hp += (hitbox_action.damage * hit_multiplier) as i32;
+        }
+        if !hitbox.dir {
+            self.dx -= 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
+            self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
+            self.hp += (hitbox_action.damage * hit_multiplier) as i32;
+        }
+
+        self.inv_change = 0.0;
+        self.calculate_step(delta);
+        self.flying = true;
+    }
+    pub fn execute_movement(&mut self) {
+        self.move_to(self.next_step)
+    }
+    pub fn jump(&mut self) {
+        if self.stunned {
+            return;
+        }
+        if self.next_step.1 == 0.0 {
+            self.jump_counter = 0;
+        }
+        if self.jump_counter > 1 {
+            return;
+        }
+
+        self.dy = -JUMP_STRENGTH;
+
+        self.jump_counter += 1;
+    }
+    pub fn calculate_step(&mut self, delta: u128) {
+        self.next_step.0 = (self.dx * delta as f32) as f32 / 1000.0;
+        self.next_step.1 = (self.dy * delta as f32) as f32 / 1000.0;
+    }
+    pub fn move_to(&mut self, step: (f32, f32)) {
+        self.x += step.0;
+        if !self.collide_directions.2 {
+            self.y += step.1;
+        }
+        self.collide_directions = (false, false, false, false);
+    }
+    pub fn collide_with_obstacle(&mut self, delta: u128, other: &Obstacle) {
+        let mut drop_self = true;
+        if other.obstacle_type == ObstacleType::Platform {
+            if self.drop {
+                drop_self = false;
+            }
+        }
+        if self.y + self.next_step.1 + self.h < other.y + other.h
+            && self.y + self.next_step.1 + self.h > other.y
+            && self.x + self.w - ENTITY_MARGIN > other.x
+            && self.x + ENTITY_MARGIN < other.x + other.w
+            && self.next_step.1 > 0.0
+            && drop_self
+        {
+            self.next_step.1 = 0.0;
+            self.collide_directions.2 = true;
+            self.dy = 0.0;
+            self.y = other.y - self.h;
+            self.flying = false;
+        }
+
+        if self.x + self.next_step.0 < other.x + other.w
+            && self.x + self.next_step.0 + self.w > other.x
+            && self.y + self.h > other.y + 2.0
+            && self.y + self.h < other.y + other.h
+            && other.obstacle_type == ObstacleType::Stage
+        {
+            self.next_step.0 = 0.0;
+            self.collide_directions.3 = true;
+            self.collide_directions.1 = true;
+            self.dx = 0.0;
+
+            self.flying = false;
+        }
+    }
+    pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
+        for hitbox in &other.hitboxes {
+            if self.x + self.h_x < hitbox.x as f32 + hitbox.w as f32
+                && self.x + self.h_x + self.h_w > hitbox.x as f32
+                && self.y + self.h_y < hitbox.y as f32 + hitbox.h as f32
+                && self.y + self.h_y + self.h_h > hitbox.y as f32
+            {
+                self.take_hit(delta, &hitbox);
+            }
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Action {
     pub w: f32,
@@ -402,489 +945,6 @@ impl Action {
                     class: class,
                 },
             },
-        }
-    }
-}
-pub struct Class {}
-impl Class {
-    pub fn Ant() -> Class {
-        Class {}
-    }
-}
-
-impl Entity {
-    pub fn new(
-        x: f32,
-        y: f32,
-        current_sprite: Sprite,
-        freeze_sprite: Sprite,
-        current_class: ClassType,
-        name: String,
-        ai_controlled: bool,
-        h_x: f32,
-        h_y: f32,
-        h_w: f32,
-        h_h: f32,
-    ) -> Entity {
-        Entity {
-            x: x,
-            y: y,
-            h: 0.0,
-            w: 0.0,
-            dx: 0.0,
-            dy: 0.0,
-            dir: true,
-            hp: 0,
-            flying: false,
-            up: false,
-            left: false,
-            down: false,
-            right: false,
-            up_released: false,
-            left_released: false,
-            down_released: false,
-            right_released: false,
-            hit_released: false,
-            special: false,
-            hit: false,
-            smashing: false,
-            tilting: false,
-            do_not_move: false,
-            next_step: (0.0, 0.0),
-            collide_directions: (false, false, false, false),
-            current_sprite: current_sprite,
-            freeze_sprite: freeze_sprite,
-            hitboxes: Vec::new(),
-            move_lock: false,
-            current_action: Action::action(current_class.clone(), ActionType::Idle, 1),
-            current_class: current_class,
-            name: name,
-            inv_change: 0.0,
-            inv_time: 1000.0,
-            jump_counter: 0,
-            drop: false,
-            freeze: false,
-            stocks: 3,
-            walk_time: 250,
-            walk_change: 0,
-            smash_time: 0,
-            smash_change: 0,
-            drop_change: 0,
-            drop_time: 300,
-            freeze_change: 0,
-            freeze_time: 64,
-            hit_change: 0,
-            tilt_change: 0,
-            tilt_time: TILT_TIME_SIDE as i32,
-            ai_controlled: ai_controlled,
-            target_entity: None,
-            h_x: h_x,
-            h_y: h_y,
-            h_w: h_w,
-            h_h: h_h,
-        }
-    }
-    pub fn ai_tick(&mut self, delta: u128) {
-        let t_e = self.target_entity.as_ref().unwrap();
-        if self.x > t_e.x + 16.0 {
-            self.left = true;
-            self.right = false;
-            self.dir = false;
-        } else if self.x < t_e.x - 16.0 {
-            self.right = true;
-            self.left = false;
-            self.dir = true;
-        } else {
-            self.right = false;
-            self.left = false;
-        }
-        if self.y < t_e.y {
-            self.drop = true;
-        }
-        if self.y > t_e.y && self.next_step.1 >= 0.0 {
-            self.jump();
-        }
-        self.hit = true;
-    }
-    pub fn tick(&mut self, delta: u128) {
-        if self.ai_controlled {
-            self.ai_tick(delta);
-        }
-        if self.stocks < 0 {}
-
-        if self.drop {
-            self.drop_change += delta as i32;
-            if self.drop_change > self.drop_time {
-                self.drop_change = 0;
-                self.drop = false;
-            }
-        }
-        if self.freeze {
-            self.freeze_change += delta as i32;
-            if self.freeze_change > self.freeze_time {
-                self.freeze = false;
-                self.freeze_change = 0;
-            }
-        }
-        self.slow_movement();
-        self.process_hit_actions(delta);
-        if self.current_action.action == ActionType::Idle
-            && (self.next_step.0 > 0.1 || self.next_step.0 < -0.1)
-        {
-            self.walk_change += delta as i32;
-            if self.walk_change > self.walk_time {
-                if self.current_sprite == get_sprites(self.current_class.clone(), "2".to_string()) {
-                    self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
-                } else {
-                    self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
-                }
-                self.walk_change = 0;
-            }
-        } else {
-            self.current_sprite = get_animations(
-                self.current_class.clone().clone(),
-                self.current_action.action.clone(),
-            );
-        }
-        if self.freeze {
-            self.current_sprite = self.freeze_sprite.clone();
-        }
-        self.inv_change += delta as f32;
-        for hitbox in &mut self.hitboxes {
-            let mut h_x = self.x;
-            let mut h_y = self.y + self.current_action.y;
-            if self.dir {
-                h_x += self.current_action.x + self.w
-            } else {
-                h_x -= self.current_action.w + self.current_action.x;
-            }
-            hitbox.x = h_x;
-            hitbox.y = h_y;
-        }
-        self.dy += GRAVITY;
-        self.calculate_step(delta);
-        for hitbox in &mut self.hitboxes {
-            hitbox.change += delta as f32;
-            if hitbox.change > hitbox.duration {
-                self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
-                hitbox.active = false;
-                self.move_lock = false;
-            }
-        }
-        self.hitboxes.retain(|h| h.active);
-        if self.hitboxes.len() == 0 {
-            self.current_action.action = ActionType::Idle;
-        }
-        if self.next_step.1 == 0.0 {
-            self.jump_counter = 0;
-        }
-        if self.stocks > 1
-            && (self.y > 256.0 || self.y < -200.0 || self.x < -200.0 || self.x > 256.0 + 200.0)
-        {
-            self.stocks -= 1;
-            self.x = 48.0;
-            self.y = 0.0;
-            self.hp = 0;
-            self.dy = 0.0;
-            self.dx = 0.0;
-        }
-    }
-    pub fn process_hit_actions(&mut self, delta: u128) {
-        self.hit_change += delta as i32;
-        if self.tilting && self.hit {
-            self.smashing = true;
-        }
-        if self.smashing {
-            self.smash_change += delta as i32;
-        } else {
-            self.smash_change = 1;
-        }
-
-        if self.tilting {
-            self.tilt_change += delta as i32;
-            if self.tilt_change > self.tilt_time {
-                self.tilt_change = 0;
-                self.tilting = false;
-            }
-        }
-        if self.hit_released {
-            if (self.left || self.right)
-                && self.hit_change
-                    > Action::action(
-                        self.current_class.clone(),
-                        ActionType::SideSmash,
-                        self.smash_change.try_into().unwrap(),
-                    )
-                    .hit_time as i32
-                && self.smashing
-            {
-                let hit_type = ActionType::SideSmash;
-                self.smashing = false;
-                self.do_not_move = true;
-
-                self.execute_action(
-                    delta,
-                    Action::action(
-                        self.current_class.clone(),
-                        hit_type,
-                        self.smash_change.try_into().unwrap(),
-                    ),
-                );
-                self.hit_change = 0;
-                self.hit_released = false;
-            }
-            if self.up
-                && self.hit_change
-                    > Action::action(
-                        self.current_class.clone(),
-                        ActionType::UpSmash,
-                        self.smash_change.try_into().unwrap(),
-                    )
-                    .hit_time as i32
-                && self.smashing
-            {
-                let mut hit_type = ActionType::UpSmash;
-                hit_type = ActionType::UpSmash;
-                self.smashing = false;
-                self.do_not_move = true;
-                self.execute_action(
-                    delta,
-                    Action::action(
-                        self.current_class.clone(),
-                        hit_type,
-                        self.smash_change.try_into().unwrap(),
-                    ),
-                );
-                self.hit_change = 0;
-                self.up_released = false;
-                self.hit_released = false;
-            }
-            self.hit_released = false;
-        }
-
-        if self.hit && !self.smashing {
-            if !self.up
-                && !self.down
-                && !self.left
-                && !self.right
-                && self.next_step.1 == 0.0
-                && self.hit_change
-                    > Action::action(self.current_class.clone(), ActionType::Jab, 1).hit_time as i32
-            {
-                let mut hit_type = ActionType::Jab;
-                self.execute_action(
-                    delta,
-                    Action::action(self.current_class.clone(), hit_type, 1),
-                );
-                self.hit_change = 0;
-            }
-            if !self.up
-                && !self.down
-                && !self.right
-                && !self.left
-                && self.next_step.1 != 0.0
-                && self.hit_change
-                    > Action::action(self.current_class.clone(), ActionType::Nair, 1).hit_time
-                        as i32
-            {
-                self.execute_action(
-                    delta,
-                    Action::action(self.current_class.clone(), ActionType::Nair, 1),
-                );
-                self.hit_change = 0;
-            }
-
-            let mut hit_type = ActionType::Slide;
-            if self.next_step.1 != 0.0 {
-                hit_type = ActionType::Sair;
-            }
-            if (self.right || self.left)
-                && self.hit_change
-                    > Action::action(self.current_class.clone(), hit_type.clone(), 1).hit_time
-                        as i32
-            {
-                self.execute_action(
-                    delta,
-                    Action::action(self.current_class.clone(), hit_type, 1),
-                );
-                self.hit_change = 0;
-            }
-            if self.up
-                && self.hit_change
-                    > Action::action(self.current_class.clone(), ActionType::Uair, 1).hit_time
-                        as i32
-            {
-                let mut hit_type = ActionType::Uair;
-                self.execute_action(
-                    delta,
-                    Action::action(self.current_class.clone(), ActionType::Uair, 1),
-                );
-                self.hit_change = 0;
-                self.up_released = false;
-            }
-            if self.down
-                && self.next_step.1 > 0.0
-                && self.hit_change
-                    > Action::action(self.current_class.clone(), ActionType::Dair, 1).hit_time
-                        as i32
-            {
-                let mut hit_type = ActionType::Dair;
-                self.execute_action(
-                    delta,
-                    Action::action(self.current_class.clone(), hit_type, 1),
-                );
-                self.hit_change = 0;
-            }
-        }
-        if !self.right && !self.left && !self.up {
-            self.smashing = false;
-            self.do_not_move = false;
-        }
-
-        if self.up {
-            self.tilt_time = TILT_TIME_UP as i32;
-        } else {
-            self.tilt_time = TILT_TIME_SIDE as i32;
-        }
-    }
-    pub fn slow_movement(&mut self) {
-        if self.left && !self.smashing && !self.do_not_move {
-            let acc_ratio = match self.flying {
-                true => 0.02,
-                false => 0.5,
-            };
-            self.dx = self.dx.lerp(-60.0, acc_ratio);
-        } else if self.right && !self.smashing && !self.do_not_move {
-            let acc_ratio = match self.flying {
-                true => 0.02,
-                false => 0.5,
-            };
-            self.dx = self.dx.lerp(60.0, acc_ratio);
-        } else if !self.flying && self.next_step.1 == 0.0 {
-            self.dx = self.dx.lerp(0.0, 0.2);
-        }
-    }
-    pub fn execute_action(&mut self, delta: u128, action: Action) {
-        if self.freeze {
-            return;
-        }
-        self.current_action = action.clone();
-        let mut h_x = self.x;
-        let mut h_y = self.y + action.y;
-        if self.dir {
-            h_x += action.x + self.w
-        } else {
-            h_x -= action.w + action.x;
-        }
-        self.hitboxes.push(HitBox {
-            x: h_x,
-            y: h_y,
-            w: action.w,
-            h: action.h,
-            dir: self.dir,
-            duration: action.duration,
-            change: 0.0,
-            active: true,
-            action: action,
-        });
-        self.move_lock = true;
-    }
-    pub fn take_hit(&mut self, delta: u128, hitbox: &NetworkBare) {
-        if !hitbox.active {
-            return;
-        }
-        if self.inv_change < self.inv_time {
-            return;
-        }
-        self.freeze = true;
-        let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
-        let hit_multiplier = 1.0 + self.hp as f32 / 90.0;
-        let hit_multiplier_knock = 3.0 + self.hp as f32 / 10.0;
-        if hitbox.dir {
-            self.dx += 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
-            self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
-            self.hp += (hitbox_action.damage * hit_multiplier) as i32;
-        }
-        if !hitbox.dir {
-            self.dx -= 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
-            self.dy -= 5.0 + hitbox_action.knock_y * hit_multiplier_knock;
-            self.hp += (hitbox_action.damage * hit_multiplier) as i32;
-        }
-
-        self.inv_change = 0.0;
-        self.calculate_step(delta);
-        self.flying = true;
-    }
-    pub fn execute_movement(&mut self) {
-        self.move_to(self.next_step)
-    }
-    pub fn jump(&mut self) {
-        if self.next_step.1 == 0.0 {
-            self.jump_counter = 0;
-        }
-        if self.jump_counter > 1 {
-            return;
-        }
-
-        self.dy = -JUMP_STRENGTH;
-
-        self.jump_counter += 1;
-    }
-    pub fn calculate_step(&mut self, delta: u128) {
-        self.next_step.0 = (self.dx * delta as f32) as f32 / 1000.0;
-        self.next_step.1 = (self.dy * delta as f32) as f32 / 1000.0;
-    }
-    pub fn move_to(&mut self, step: (f32, f32)) {
-        self.x += step.0;
-        if !self.collide_directions.2 {
-            self.y += step.1;
-        }
-        self.collide_directions = (false, false, false, false);
-    }
-    pub fn collide_with_obstacle(&mut self, delta: u128, other: &Obstacle) {
-        let mut drop_self = true;
-        if other.obstacle_type == ObstacleType::Platform {
-            if self.drop {
-                drop_self = false;
-            }
-        }
-        if self.y + self.next_step.1 + self.h < other.y + other.h
-            && self.y + self.next_step.1 + self.h > other.y
-            && self.x + self.w - ENTITY_MARGIN > other.x
-            && self.x + ENTITY_MARGIN < other.x + other.w
-            && self.next_step.1 > 0.0
-            && drop_self
-        {
-            self.next_step.1 = 0.0;
-            self.collide_directions.2 = true;
-            self.dy = 0.0;
-            self.y = other.y - self.h;
-            self.flying = false;
-        }
-
-        if self.x + self.next_step.0 < other.x + other.w
-            && self.x + self.next_step.0 + self.w > other.x
-            && self.y + self.h > other.y + 2.0
-            && self.y + self.h < other.y + other.h
-            && other.obstacle_type == ObstacleType::Stage
-        {
-            self.next_step.0 = 0.0;
-            self.collide_directions.3 = true;
-            self.collide_directions.1 = true;
-            self.dx = 0.0;
-
-            self.flying = false;
-        }
-    }
-    pub fn collide_with_hitboxes(&mut self, delta: u128, other: &NetworkEntity) {
-        for hitbox in &other.hitboxes {
-            if self.x + self.h_x < hitbox.x as f32 + hitbox.w as f32
-                && self.x + self.h_x + self.h_w > hitbox.x as f32
-                && self.y + self.h_y < hitbox.y as f32 + hitbox.h as f32
-                && self.y + self.h_y + self.h_h > hitbox.y as f32
-            {
-                self.take_hit(delta, &hitbox);
-            }
         }
     }
 }

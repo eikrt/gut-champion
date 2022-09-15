@@ -37,7 +37,8 @@ const RESOLUTION_X: u32 = 256;
 const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
-const SHOW_HITBOXES: bool = true;
+const SHOW_HITBOXES: bool = false;
+const ENABLE_BOTS: bool = false;
 const SHOW_BACKGROUND: bool = true;
 const STATUS_FONT_SIZE: u16 = 200;
 const STATUS_PERCENTAGE_COLOR: Color = Color::RGBA(255, 255, 195, 255);
@@ -221,6 +222,18 @@ fn main_loop() -> Result<(), String> {
                 .unwrap(),
         ),
         (
+            Sprite::AlchemistStun,
+            texture_creator
+                .load_texture("res/alchemist/alchemist_stun.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::AlchemistShield,
+            texture_creator
+                .load_texture("res/alchemist/alchemist_shield.png")
+                .unwrap(),
+        ),
+        (
             Sprite::Alchemist2,
             texture_creator
                 .load_texture("res/alchemist/alchemist_2.png")
@@ -236,6 +249,18 @@ fn main_loop() -> Result<(), String> {
             Sprite::CommodoreFreeze,
             texture_creator
                 .load_texture("res/commodore/commodore_freeze.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::CommodoreStun,
+            texture_creator
+                .load_texture("res/commodore/commodore_stun.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::CommodoreShield,
+            texture_creator
+                .load_texture("res/commodore/commodore_shield.png")
                 .unwrap(),
         ),
         (
@@ -279,6 +304,10 @@ fn main_loop() -> Result<(), String> {
             texture_creator
                 .load_texture("res/environment/platform.png")
                 .unwrap(),
+        ),
+        (
+            Sprite::Shield,
+            texture_creator.load_texture("res/misc/shield.png").unwrap(),
         ),
     ]);
     let long_button_sprite = sprites.get(&Sprite::LongButtonMain).unwrap();
@@ -366,6 +395,8 @@ fn main_loop() -> Result<(), String> {
                 0.0,
                 get_sprites(player_class.clone(), "1".to_string()),
                 get_sprites(player_class.clone(), "freeze".to_string()),
+                get_sprites(player_class.clone(), "stun".to_string()),
+                get_sprites(player_class.clone(), "shield".to_string()),
                 player_class.clone(),
                 "Player".to_string(),
                 false,
@@ -375,13 +406,17 @@ fn main_loop() -> Result<(), String> {
                 12.0,
             ),
         ),
-        (
+    ])));
+    if ENABLE_BOTS {
+        entities.lock().unwrap().insert(
             rng.gen(),
             Entity::new(
                 98.0,
                 0.0,
                 get_sprites(player_class.clone(), "1".to_string()),
                 get_sprites(player_class.clone(), "freeze".to_string()),
+                get_sprites(player_class.clone(), "stun".to_string()),
+                get_sprites(player_class.clone(), "shield".to_string()),
                 player_class.clone(),
                 "Bot".to_string(),
                 true,
@@ -390,8 +425,8 @@ fn main_loop() -> Result<(), String> {
                 8.0,
                 12.0,
             ),
-        ),
-    ])));
+        );
+    }
     let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
     let mut time_from_last_packet_main: Arc<Mutex<u128>> = time_from_last_packet.clone();
     let mut time_from_last_packet_compare = SystemTime::now();
@@ -587,6 +622,15 @@ fn main_loop() -> Result<(), String> {
                         .unwrap()
                         .special = true;
                 }
+
+                Event::KeyDown {
+                    keycode: Some(Keycode::I),
+                    ..
+                } => {
+                    if !player_entity.shield && !player_entity.stunned {
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().shield = true;
+                    }
+                }
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
@@ -673,6 +717,17 @@ fn main_loop() -> Result<(), String> {
                 }
 
                 // WASD
+                Event::KeyUp {
+                    keycode: Some(Keycode::I),
+                    ..
+                } => {
+                    entities
+                        .lock()
+                        .unwrap()
+                        .get_mut(&player_id)
+                        .unwrap()
+                        .release_shield();
+                }
                 Event::KeyUp {
                     keycode: Some(Keycode::W),
                     ..
@@ -944,6 +999,26 @@ fn main_loop() -> Result<(), String> {
                             ));
                         }
                     }
+                    if e.shield {
+                        let w = 20.0 -(e.shield_change as f32 / e.shield_time as f32
+                            * texture.query().width as f32) as f32;
+                        let h = 20.0 - (e.shield_change as f32 / e.shield_time as f32
+                            * texture.query().height as f32) as f32;
+                        canvas.copy_ex(
+                            sprites.get(&Sprite::Shield).unwrap(),
+                            Rect::new(0, 0, texture.query().width, texture.query().height),
+                            Rect::new(
+                                ((-camera.x + e.x - w as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
+                                ((-camera.y + e.y - h as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
+                                (w * SCALE) as u32,
+                                (h * SCALE) as u32,
+                            ),
+                            0.0,
+                            Point::new((e.x * SCALE) as i32, (e.y * SCALE) as i32),
+                            !e.dir,
+                            false,
+                        )?;
+                    }
                 }
 
                 if SHOW_HITBOXES {
@@ -985,6 +1060,26 @@ fn main_loop() -> Result<(), String> {
                                 (hitbox.h as f32 * SCALE) as u32,
                             ));
                         }
+                    }
+                    if e.shield_percentage > 0.0 {
+                        let w = 20.0 -(e.shield_percentage as f32
+                            * texture.query().width as f32) as f32;
+                        let h = 20.0 - (e.shield_percentage as f32
+                            * texture.query().height as f32) as f32;
+                        canvas.copy_ex(
+                            sprites.get(&Sprite::Shield).unwrap(),
+                            Rect::new(0, 0, texture.query().width, texture.query().height),
+                            Rect::new(
+                                ((-camera.x + e.x - w as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
+                                ((-camera.y + e.y - h as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
+                                (w * SCALE) as u32,
+                                (h * SCALE) as u32,
+                            ),
+                            0.0,
+                            Point::new((e.x * SCALE) as i32, (e.y * SCALE) as i32),
+                            !e.dir,
+                            false,
+                        )?;
                     }
                 }
                 let entities_len = entities.lock().unwrap().len();

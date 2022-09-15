@@ -28,6 +28,8 @@ pub enum Sprite {
     AlchemistSideSmash,
     AlchemistUpSmash,
     AlchemistFreeze,
+    AlchemistStun,
+    AlchemistShield,
     Commodore,
     Commodore2,
     CommodoreJab,
@@ -39,11 +41,14 @@ pub enum Sprite {
     CommodoreSideSmash,
     CommodoreUpSmash,
     CommodoreFreeze,
+    CommodoreStun,
+    CommodoreShield,
     Basement,
     LongButtonMain,
     LongButtonHovered,
     LongButtonPressed,
     Placeholder,
+    Shield,
 }
 pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
     match class {
@@ -75,12 +80,16 @@ pub fn get_sprites(class: ClassType, key: String) -> Sprite{
     match class {
         ClassType::Commodore => match key.as_str() {
             "freeze" => Sprite::CommodoreFreeze,
+            "stun" => Sprite::CommodoreStun,
+            "shield" => Sprite::CommodoreShield,
             "1" => Sprite::Commodore,
             "2" => Sprite::Commodore2,
             _ => Sprite::Commodore
         }
         ClassType::Alchemist => match key.as_str() {
             "freeze" => Sprite::AlchemistFreeze,
+            "stun" => Sprite::AlchemistStun,
+            "shield" => Sprite::AlchemistShield,
             "1" => Sprite::Alchemist,
             "2" => Sprite::Alchemist2,
             _ => Sprite::Alchemist
