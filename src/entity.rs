@@ -137,6 +137,8 @@ pub struct Entity {
     pub h_w: f32,
     pub h_h: f32,
     pub dodge: bool,
+    pub dodge_change: i32,
+    pub dodge_time: i32,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -237,6 +239,8 @@ impl Entity {
             h_y: h_y,
             h_w: h_w,
             h_h: h_h,
+            dodge_time: 500,
+            dodge_change: 0,
         }
     }
     pub fn ai_tick(&mut self, delta: u128) {
@@ -532,14 +536,15 @@ impl Entity {
         } else {
             self.tilt_time = TILT_TIME_SIDE as i32;
         }
-
-        if self.dodge {
+        self.dodge_change += delta as i32;
+        if self.dodge && self.dodge_change > self.dodge_time {
             let mut hit_type = ActionType::Dodge;
             self.execute_action(
                 delta,
                 Action::action(self.current_class.clone(), hit_type, 1),
             );
             self.dodge = false;
+            self.dodge_change = 0;
         }
     }
     pub fn release_shield(&mut self) {
