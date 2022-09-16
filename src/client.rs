@@ -400,6 +400,20 @@ fn main_loop() -> Result<(), String> {
     let mut tilt_change = 0;
     let mut tilt_time = 186;
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::new()));
+        entities.lock().unwrap().insert(
+            player_id,
+            Entity::new(
+                98.0,
+                0.0,
+                player_class.clone(),
+                "Player".to_string(),
+                true,
+                4.0,
+                0.0,
+                8.0,
+                12.0,
+            ),
+        );
     if ENABLE_BOTS {
         entities.lock().unwrap().insert(
             rng.gen(),
@@ -485,22 +499,8 @@ fn main_loop() -> Result<(), String> {
     let mut auto_walk_change = 0;
     let mut auto_walk_time = 500;
     while running {
-        let player_entity = entities
-            .lock()
-            .unwrap()
-            .get(&player_id)
-            .unwrap_or(&Entity::new(
-                98.0,
-                0.0,
-                player_class.clone(),
-                "Bot".to_string(),
-                true,
-                4.0,
-                0.0,
-                8.0,
-                12.0,
-            ))
-            .clone();
+
+        let player_entity = entities.lock().unwrap().get_mut(&player_id).unwrap().clone(); 
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if control_mode == ControlMode::Auto {
             auto_walk_change += delta.as_millis();
@@ -632,7 +632,6 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     if !player_entity.shield && !player_entity.stunned {
-                        
                         entities
                             .lock()
                             .unwrap()
@@ -652,7 +651,7 @@ fn main_loop() -> Result<(), String> {
                             } else if select_index == 1 {
                                 player_class = ClassType::Commodore;
                             }
-
+                            entities.lock().unwrap().clear();
                             entities.lock().unwrap().insert(
                                 player_id,
                                 Entity::new(
