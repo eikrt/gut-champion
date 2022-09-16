@@ -38,7 +38,7 @@ const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = false;
-const ENABLE_BOTS: bool = false;
+const ENABLE_BOTS: bool = true;
 const SHOW_BACKGROUND: bool = true;
 const STATUS_FONT_SIZE: u16 = 200;
 const STATUS_PERCENTAGE_COLOR: Color = Color::RGBA(255, 255, 195, 255);
@@ -400,36 +400,20 @@ fn main_loop() -> Result<(), String> {
     let mut tilt_change = 0;
     let mut tilt_time = 186;
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::new()));
-        entities.lock().unwrap().insert(
-            player_id,
-            Entity::new(
-                98.0,
-                0.0,
-                player_class.clone(),
-                "Player".to_string(),
-                true,
-                4.0,
-                0.0,
-                8.0,
-                12.0,
-            ),
-        );
-    if ENABLE_BOTS {
-        entities.lock().unwrap().insert(
-            rng.gen(),
-            Entity::new(
-                98.0,
-                0.0,
-                player_class.clone(),
-                "Bot".to_string(),
-                true,
-                4.0,
-                0.0,
-                8.0,
-                12.0,
-            ),
-        );
-    }
+    entities.lock().unwrap().insert(
+        player_id,
+        Entity::new(
+            98.0,
+            0.0,
+            player_class.clone(),
+            "Player".to_string(),
+            true,
+            4.0,
+            0.0,
+            8.0,
+            12.0,
+        ),
+    );
     let mut time_from_last_packet: Arc<Mutex<u128>> = Arc::new(Mutex::new(0));
     let mut time_from_last_packet_main: Arc<Mutex<u128>> = time_from_last_packet.clone();
     let mut time_from_last_packet_compare = SystemTime::now();
@@ -499,8 +483,12 @@ fn main_loop() -> Result<(), String> {
     let mut auto_walk_change = 0;
     let mut auto_walk_time = 500;
     while running {
-
-        let player_entity = entities.lock().unwrap().get_mut(&player_id).unwrap().clone(); 
+        let player_entity = entities
+            .lock()
+            .unwrap()
+            .get_mut(&player_id)
+            .unwrap()
+            .clone();
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if control_mode == ControlMode::Auto {
             auto_walk_change += delta.as_millis();
@@ -666,6 +654,23 @@ fn main_loop() -> Result<(), String> {
                                     12.0,
                                 ),
                             );
+
+                            if ENABLE_BOTS {
+                                entities.lock().unwrap().insert(
+                                    rng.gen(),
+                                    Entity::new(
+                                        98.0,
+                                        0.0,
+                                        player_class.clone(),
+                                        "Bot".to_string(),
+                                        true,
+                                        4.0,
+                                        0.0,
+                                        8.0,
+                                        12.0,
+                                    ),
+                                );
+                            }
                             client_threads(
                                 ip.to_string(),
                                 time_from_last_packet.clone(),
