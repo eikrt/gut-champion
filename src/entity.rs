@@ -27,7 +27,16 @@ pub enum ActionType {
     Slide,
     SideSmash,
     UpSmash,
+    Dodge,
     Idle,
+}
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub enum StatusType {
+    Shield,
+    Freeze,
+    Stun,
+    One,
+    Two,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ClassType {
@@ -127,6 +136,7 @@ pub struct Entity {
     pub h_y: f32,
     pub h_w: f32,
     pub h_h: f32,
+    pub dodge: bool,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -154,10 +164,6 @@ impl Entity {
     pub fn new(
         x: f32,
         y: f32,
-        current_sprite: Sprite,
-        freeze_sprite: Sprite,
-        stunned_sprite: Sprite,
-        shield_sprite: Sprite,
         current_class: ClassType,
         name: String,
         ai_controlled: bool,
@@ -194,10 +200,10 @@ impl Entity {
             do_not_move: false,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
-            current_sprite: current_sprite,
-            freeze_sprite: freeze_sprite,
-            stunned_sprite: stunned_sprite,
-            shield_sprite: shield_sprite,
+            current_sprite: get_sprites(current_class.clone(), StatusType::One),
+            freeze_sprite: get_sprites(current_class.clone(), StatusType::Freeze),
+            stunned_sprite: get_sprites(current_class.clone(), StatusType::Stun),
+            shield_sprite: get_sprites(current_class.clone(), StatusType::Shield),
             hitboxes: Vec::new(),
             move_lock: false,
             current_action: Action::action(current_class.clone(), ActionType::Idle, 1),
@@ -226,6 +232,7 @@ impl Entity {
             tilt_time: TILT_TIME_SIDE as i32,
             ai_controlled: ai_controlled,
             target_entity: None,
+            dodge: false,
             h_x: h_x,
             h_y: h_y,
             h_w: h_w,
@@ -287,10 +294,10 @@ impl Entity {
         {
             self.walk_change += delta as i32;
             if self.walk_change > self.walk_time {
-                if self.current_sprite == get_sprites(self.current_class.clone(), "2".to_string()) {
-                    self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                if self.current_sprite == get_sprites(self.current_class.clone(), StatusType::One) {
+                    self.current_sprite = get_sprites(self.current_class.clone(), StatusType::Two);
                 } else {
-                    self.current_sprite = get_sprites(self.current_class.clone(), "2".to_string());
+                    self.current_sprite = get_sprites(self.current_class.clone(), StatusType::Two);
                 }
                 self.walk_change = 0;
             }
@@ -323,7 +330,7 @@ impl Entity {
         for hitbox in &mut self.hitboxes {
             hitbox.change += delta as f32;
             if hitbox.change > hitbox.duration {
-                self.current_sprite = get_sprites(self.current_class.clone(), "1".to_string());
+                self.current_sprite = get_sprites(self.current_class.clone(), StatusType::One);
                 hitbox.active = false;
                 self.move_lock = false;
             }
@@ -342,17 +349,16 @@ impl Entity {
         }
     }
     pub fn die(&mut self) {
-
-            self.stocks -= 1;
-            self.x = 48.0;
-            self.y = 0.0;
-            self.hp = 0;
-            self.dy = 0.0;
-            self.dx = 0.0;
-            self.stunned = false;
-            self.stun_change = 0;
-            self.freeze_change = 0;
-            self.freeze = false;
+        self.stocks -= 1;
+        self.x = 48.0;
+        self.y = 0.0;
+        self.hp = 0;
+        self.dy = 0.0;
+        self.dx = 0.0;
+        self.stunned = false;
+        self.stun_change = 0;
+        self.freeze_change = 0;
+        self.freeze = false;
     }
     pub fn process_hit_actions(&mut self, delta: u128) {
         if self.shield {
@@ -376,7 +382,10 @@ impl Entity {
         } else {
             self.smash_change = 1;
         }
-
+        if (self.left || self.right) && self.shield {
+            self.shield = false;
+            self.dodge = true;
+        }
         if self.tilting {
             self.tilt_change += delta as i32;
             if self.tilt_change > self.tilt_time {
@@ -523,11 +532,25 @@ impl Entity {
         } else {
             self.tilt_time = TILT_TIME_SIDE as i32;
         }
+
+        if self.dodge {
+            let mut hit_type = ActionType::Dodge;
+            self.execute_action(
+                delta,
+                Action::action(self.current_class.clone(), hit_type, 1),
+            );
+            self.hit_change = 0;
+            self.dodge = false;
+        }
     }
     pub fn release_shield(&mut self) {
         self.shield = false;
     }
     pub fn accel_movement(&mut self) {
+        let speed = match self.current_action.action {
+            ActionType::Dodge => 120.0,
+            _ => 60.0,
+        };
         if self.stunned {
             self.shield_change = 0;
             if self.next_step.1 == 0.0 {
@@ -535,19 +558,16 @@ impl Entity {
             }
             return;
         }
+
+        let acc_ratio = match self.flying {
+            true => 0.02,
+            false => 0.5,
+            };
         if self.left && !self.smashing && !self.do_not_move {
-            let acc_ratio = match self.flying {
-                true => 0.02,
-                false => 0.5,
-            };
-            self.dx = self.dx.lerp(-60.0, acc_ratio);
+            self.dx = self.dx.lerp(-speed, acc_ratio);
         } else if self.right && !self.smashing && !self.do_not_move {
-            let acc_ratio = match self.flying {
-                true => 0.02,
-                false => 0.5,
-            };
-            self.dx = self.dx.lerp(60.0, acc_ratio);
-        } else if !self.flying && self.next_step.1 == 0.0 {
+            self.dx = self.dx.lerp(speed, acc_ratio);
+        } else if !self.flying && self.next_step.1 == 0.0 && self.current_action.action != ActionType::Dodge{
             self.dx = self.dx.lerp(0.0, 0.2);
         }
     }
@@ -576,6 +596,16 @@ impl Entity {
         });
         self.move_lock = true;
     }
+    pub fn start_shield(&mut self) {
+        if self.next_step.1 != 0.0 {
+            return;
+        }
+        if self.next_step.0 < 0.1 && self.next_step.0 > -0.1 {
+            self.shield = true;
+        } else if self.current_action.action != ActionType::Dodge {
+            //self.dodge = true;
+        }
+    }
     pub fn take_hit(&mut self, delta: u128, hitbox: &NetworkBare) {
         if !hitbox.active {
             return;
@@ -586,6 +616,9 @@ impl Entity {
 
         if self.shield {
             self.shield_change += 20;
+            return;
+        }
+        if self.current_action.action == ActionType::Dodge {
             return;
         }
         self.freeze = true;
@@ -824,6 +857,20 @@ impl Action {
                     action: action,
                     class: class,
                 },
+
+                ActionType::Dodge => Action {
+                    w: 0.0,
+                    h: 0.0,
+                    x: -0.0,
+                    y: 0.0,
+                    knock_x: 0.0 * hit_ratio,
+                    knock_y: 0.0 * hit_ratio,
+                    damage: 0.0 * hit_ratio,
+                    hit_time: 1000.0,
+                    duration: 200.0,
+                    action: action,
+                    class: class,
+                },
             },
             ClassType::Alchemist => match action {
                 ActionType::Jab => Action {
@@ -850,6 +897,19 @@ impl Action {
                     damage: 5.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 750.0,
+                    action: action,
+                    class: class,
+                },
+                ActionType::Dodge => Action {
+                    w: 0.0,
+                    h: 0.0,
+                    x: -0.0,
+                    y: 0.0,
+                    knock_x: 0.0 * hit_ratio,
+                    knock_y: 0.0 * hit_ratio,
+                    damage: 0.0 * hit_ratio,
+                    hit_time: 1000.0,
+                    duration: 200.0,
                     action: action,
                     class: class,
                 },

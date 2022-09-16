@@ -264,6 +264,18 @@ fn main_loop() -> Result<(), String> {
                 .unwrap(),
         ),
         (
+            Sprite::CommodoreDodge,
+            texture_creator
+                .load_texture("res/commodore/commodore_dodge.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::AlchemistDodge,
+            texture_creator
+                .load_texture("res/alchemist/alchemist_dodge.png")
+                .unwrap(),
+        ),
+        (
             Sprite::Basement,
             texture_creator
                 .load_texture("res/bgs/basement_bg.png")
@@ -387,36 +399,13 @@ fn main_loop() -> Result<(), String> {
     ];
     let mut tilt_change = 0;
     let mut tilt_time = 186;
-    let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::from([
-        (
-            player_id,
-            Entity::new(
-                48.0,
-                0.0,
-                get_sprites(player_class.clone(), "1".to_string()),
-                get_sprites(player_class.clone(), "freeze".to_string()),
-                get_sprites(player_class.clone(), "stun".to_string()),
-                get_sprites(player_class.clone(), "shield".to_string()),
-                player_class.clone(),
-                "Player".to_string(),
-                false,
-                7.0,
-                8.0,
-                8.0,
-                12.0,
-            ),
-        ),
-    ])));
+    let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::new()));
     if ENABLE_BOTS {
         entities.lock().unwrap().insert(
             rng.gen(),
             Entity::new(
                 98.0,
                 0.0,
-                get_sprites(player_class.clone(), "1".to_string()),
-                get_sprites(player_class.clone(), "freeze".to_string()),
-                get_sprites(player_class.clone(), "stun".to_string()),
-                get_sprites(player_class.clone(), "shield".to_string()),
                 player_class.clone(),
                 "Bot".to_string(),
                 true,
@@ -496,7 +485,22 @@ fn main_loop() -> Result<(), String> {
     let mut auto_walk_change = 0;
     let mut auto_walk_time = 500;
     while running {
-        let player_entity = entities.lock().unwrap().get(&player_id).unwrap().clone();
+        let player_entity = entities
+            .lock()
+            .unwrap()
+            .get(&player_id)
+            .unwrap_or(&Entity::new(
+                98.0,
+                0.0,
+                player_class.clone(),
+                "Bot".to_string(),
+                true,
+                4.0,
+                0.0,
+                8.0,
+                12.0,
+            ))
+            .clone();
         let delta = SystemTime::now().duration_since(compare_time).unwrap();
         if control_mode == ControlMode::Auto {
             auto_walk_change += delta.as_millis();
@@ -628,7 +632,13 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     if !player_entity.shield && !player_entity.stunned {
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().shield = true;
+                        
+                        entities
+                            .lock()
+                            .unwrap()
+                            .get_mut(&player_id)
+                            .unwrap()
+                            .start_shield();
                     }
                 }
                 Event::KeyDown {
@@ -643,19 +653,20 @@ fn main_loop() -> Result<(), String> {
                                 player_class = ClassType::Commodore;
                             }
 
-                            entities
-                                .lock()
-                                .unwrap()
-                                .get_mut(&player_id)
-                                .unwrap()
-                                .current_class = player_class.clone();
-                            entities
-                                .lock()
-                                .unwrap()
-                                .get_mut(&player_id)
-                                .unwrap()
-                                .current_sprite =
-                                get_sprites(player_class.clone(), "1".to_string());
+                            entities.lock().unwrap().insert(
+                                player_id,
+                                Entity::new(
+                                    48.0,
+                                    0.0,
+                                    player_class.clone(),
+                                    "Player".to_string(),
+                                    false,
+                                    7.0,
+                                    8.0,
+                                    8.0,
+                                    12.0,
+                                ),
+                            );
                             client_threads(
                                 ip.to_string(),
                                 time_from_last_packet.clone(),
@@ -1000,16 +1011,22 @@ fn main_loop() -> Result<(), String> {
                         }
                     }
                     if e.shield {
-                        let w = 20.0 -(e.shield_change as f32 / e.shield_time as f32
-                            * texture.query().width as f32) as f32;
-                        let h = 20.0 - (e.shield_change as f32 / e.shield_time as f32
-                            * texture.query().height as f32) as f32;
+                        let w = 20.0
+                            - (e.shield_change as f32 / e.shield_time as f32
+                                * texture.query().width as f32)
+                                as f32;
+                        let h = 20.0
+                            - (e.shield_change as f32 / e.shield_time as f32
+                                * texture.query().height as f32)
+                                as f32;
                         canvas.copy_ex(
                             sprites.get(&Sprite::Shield).unwrap(),
                             Rect::new(0, 0, texture.query().width, texture.query().height),
                             Rect::new(
-                                ((-camera.x + e.x - w as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
-                                ((-camera.y + e.y - h as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
+                                ((-camera.x + e.x - w as f32 / 2.0 + 20 as f32 / 2.0)
+                                    * SCALE as f32) as i32,
+                                ((-camera.y + e.y - h as f32 / 2.0 + 20 as f32 / 2.0)
+                                    * SCALE as f32) as i32,
                                 (w * SCALE) as u32,
                                 (h * SCALE) as u32,
                             ),
@@ -1062,16 +1079,18 @@ fn main_loop() -> Result<(), String> {
                         }
                     }
                     if e.shield_percentage > 0.0 {
-                        let w = 20.0 -(e.shield_percentage as f32
-                            * texture.query().width as f32) as f32;
-                        let h = 20.0 - (e.shield_percentage as f32
-                            * texture.query().height as f32) as f32;
+                        let w = 20.0
+                            - (e.shield_percentage as f32 * texture.query().width as f32) as f32;
+                        let h = 20.0
+                            - (e.shield_percentage as f32 * texture.query().height as f32) as f32;
                         canvas.copy_ex(
                             sprites.get(&Sprite::Shield).unwrap(),
                             Rect::new(0, 0, texture.query().width, texture.query().height),
                             Rect::new(
-                                ((-camera.x + e.x - w as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
-                                ((-camera.y + e.y - h as f32 / 2.0 + 20 as f32 / 2.0) * SCALE as f32) as i32,
+                                ((-camera.x + e.x - w as f32 / 2.0 + 20 as f32 / 2.0)
+                                    * SCALE as f32) as i32,
+                                ((-camera.y + e.y - h as f32 / 2.0 + 20 as f32 / 2.0)
+                                    * SCALE as f32) as i32,
                                 (w * SCALE) as u32,
                                 (h * SCALE) as u32,
                             ),
