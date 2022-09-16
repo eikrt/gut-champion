@@ -539,7 +539,6 @@ impl Entity {
                 delta,
                 Action::action(self.current_class.clone(), hit_type, 1),
             );
-            self.hit_change = 0;
             self.dodge = false;
         }
     }
@@ -562,12 +561,15 @@ impl Entity {
         let acc_ratio = match self.flying {
             true => 0.02,
             false => 0.5,
-            };
+        };
         if self.left && !self.smashing && !self.do_not_move {
             self.dx = self.dx.lerp(-speed, acc_ratio);
         } else if self.right && !self.smashing && !self.do_not_move {
             self.dx = self.dx.lerp(speed, acc_ratio);
-        } else if !self.flying && self.next_step.1 == 0.0 && self.current_action.action != ActionType::Dodge{
+        } else if !self.flying
+            && self.next_step.1 == 0.0
+            && self.current_action.action != ActionType::Dodge
+        {
             self.dx = self.dx.lerp(0.0, 0.2);
         }
     }
@@ -597,14 +599,14 @@ impl Entity {
         self.move_lock = true;
     }
     pub fn start_shield(&mut self) {
-        if self.next_step.1 != 0.0 {
+        if self.next_step.1 < -0.1 && self.next_step.1 > 0.1 {
             return;
         }
-        if self.next_step.0 < 0.1 && self.next_step.0 > -0.1 {
-            self.shield = true;
-        } else if self.current_action.action != ActionType::Dodge {
-            //self.dodge = true;
+        if self.next_step.0 > 0.1 && self.next_step.0 < -0.1 {
+            return;
         }
+
+        self.shield = true;
     }
     pub fn take_hit(&mut self, delta: u128, hitbox: &NetworkBare) {
         if !hitbox.active {
