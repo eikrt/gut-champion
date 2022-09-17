@@ -31,6 +31,7 @@ pub enum Sprite {
     AlchemistStun,
     AlchemistShield,
     AlchemistDodge,
+    AlchemistGrab,
     Commodore,
     Commodore2,
     CommodoreJab,
@@ -45,6 +46,7 @@ pub enum Sprite {
     CommodoreStun,
     CommodoreShield,
     CommodoreDodge,
+    CommodoreGrab,
     Basement,
     LongButtonMain,
     LongButtonHovered,
@@ -65,6 +67,7 @@ pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
             ActionType::UpSmash => Sprite::CommodoreUpSmash,
             ActionType::Idle => Sprite::Commodore,
             ActionType::Dodge => Sprite::CommodoreDodge,
+            ActionType::Grab => Sprite::CommodoreGrab,
         },
         ClassType::Alchemist => match action {
             ActionType::Jab => Sprite::AlchemistJab,
@@ -77,6 +80,7 @@ pub fn get_animations(class: ClassType, action: ActionType) -> Sprite {
             ActionType::UpSmash => Sprite::AlchemistUpSmash,
             ActionType::Idle => Sprite::Alchemist,
             ActionType::Dodge => Sprite::AlchemistDodge,
+            ActionType::Grab => Sprite::AlchemistGrab,
         },
     }
 }

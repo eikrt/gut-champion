@@ -28,6 +28,7 @@ pub enum ActionType {
     SideSmash,
     UpSmash,
     Dodge,
+    Grab,
     Idle,
 }
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
@@ -116,6 +117,7 @@ pub struct Entity {
     pub hit: bool,
     pub special: bool,
     pub shield: bool,
+    pub grab: bool,
     pub do_not_move: bool,
     pub smash_time: i32,
     pub smash_change: i32,
@@ -139,6 +141,11 @@ pub struct Entity {
     pub dodge: bool,
     pub dodge_change: i32,
     pub dodge_time: i32,
+    pub grabbed: bool,
+    pub grab_counter: i32,
+    pub grab_release_change: i32,
+    pub grab_release_time: i32,
+    pub tapped: bool,
 }
 impl AsNetworkEntity for Entity {
     fn get_as_network_entity(&self) -> NetworkEntity {
@@ -199,6 +206,9 @@ impl Entity {
             smashing: false,
             tilting: false,
             stunned: false,
+            grab: false,
+            grabbed: false,
+            grab_counter: 0,
             do_not_move: false,
             next_step: (0.0, 0.0),
             collide_directions: (false, false, false, false),
@@ -241,6 +251,9 @@ impl Entity {
             h_h: h_h,
             dodge_time: 500,
             dodge_change: 0,
+            grab_release_change: 0,
+            grab_release_time: 500,
+            tapped: false,
         }
     }
     pub fn ai_tick(&mut self, delta: u128) {
@@ -260,16 +273,37 @@ impl Entity {
         if self.y < t_e.y {
             self.drop = true;
         }
+        if t_e.shield {
+            self.grab = true;
+
+            self.hit = false;
+            if t_e.grabbed {
+                self.hit = true;
+            }
+        } else {
+            self.hit = true;
+            self.grab = false;
+        }
+        if self.grabbed {
+            self.grab_release_change += delta as i32;
+            if self.grab_release_change > self.grab_release_time {
+                self.grab_release_change = 0;
+                self.grab_counter += 1;
+            }
+        }
         if self.y > t_e.y && self.next_step.1 >= 0.0 {
             self.jump();
         }
-        self.hit = true;
     }
     pub fn tick(&mut self, delta: u128) {
         if self.ai_controlled {
             self.ai_tick(delta);
         }
 
+        if self.grab_counter > 3 {
+            self.grab_counter = 0;
+            self.grabbed = false;
+        }
         if self.drop {
             self.drop_change += delta as i32;
             if self.drop_change > self.drop_time {
@@ -546,6 +580,18 @@ impl Entity {
             self.dodge = false;
             self.dodge_change = 0;
         }
+        if self.grab
+            && self.hit_change
+                > Action::action(self.current_class.clone(), ActionType::Grab, 1).hit_time as i32
+        {
+            let mut hit_type = ActionType::Grab;
+            self.execute_action(
+                delta,
+                Action::action(self.current_class.clone(), hit_type, 1),
+            );
+            self.hit_change = 0;
+            self.grab = false;
+        }
     }
     pub fn release_shield(&mut self) {
         self.shield = false;
@@ -567,11 +613,12 @@ impl Entity {
             true => 0.02,
             false => 0.5,
         };
-        if self.left && !self.smashing && !self.do_not_move {
+        if self.left && !self.smashing && !self.do_not_move && !self.grabbed {
             self.dx = self.dx.lerp(-speed, acc_ratio);
-        } else if self.right && !self.smashing && !self.do_not_move {
+        } else if self.right && !self.smashing && !self.do_not_move && !self.grabbed {
             self.dx = self.dx.lerp(speed, acc_ratio);
         } else if !self.flying
+            && !self.grabbed
             && self.next_step.1 == 0.0
             && self.current_action.action != ActionType::Dodge
         {
@@ -579,7 +626,7 @@ impl Entity {
         }
     }
     pub fn execute_action(&mut self, delta: u128, action: Action) {
-        if self.freeze {
+        if self.freeze || self.grabbed {
             return;
         }
         self.current_action = action.clone();
@@ -620,14 +667,20 @@ impl Entity {
         if self.inv_change < self.inv_time {
             return;
         }
-
+        if self.current_action.action == ActionType::Dodge {
+            return;
+        }
+        if hitbox.action == ActionType::Grab && !self.grabbed {
+            self.grabbed = true;
+            self.shield = false;
+            self.dx = 0.0;
+            self.dy = 0.0;
+        }
         if self.shield {
             self.shield_change += 20;
             return;
         }
-        if self.current_action.action == ActionType::Dodge {
-            return;
-        }
+
         self.freeze = true;
         let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
         let hit_multiplier = 1.0 + self.hp as f32 / 90.0;
@@ -651,7 +704,7 @@ impl Entity {
         self.move_to(self.next_step)
     }
     pub fn jump(&mut self) {
-        if self.stunned {
+        if self.stunned || self.grabbed {
             return;
         }
         if self.next_step.1 == 0.0 {
@@ -760,6 +813,19 @@ impl Action {
                     class: class,
                 },
 
+                ActionType::Grab => Action {
+                    w: 12.0,
+                    h: 12.0,
+                    x: -12.0,
+                    y: 8.0,
+                    knock_x: 0.0 * hit_ratio,
+                    knock_y: 0.0 * hit_ratio,
+                    damage: 0.0,
+                    hit_time: 1000.0,
+                    duration: 500.0,
+                    action: action,
+                    class: class,
+                },
                 ActionType::Slide => Action {
                     w: 12.0,
                     h: 12.0,
@@ -890,6 +956,19 @@ impl Action {
                     damage: 10.0,
                     hit_time: 1000.0,
                     duration: 100.0,
+                    action: action,
+                    class: class,
+                },
+                ActionType::Grab => Action {
+                    w: 12.0,
+                    h: 12.0,
+                    x: -12.0,
+                    y: 8.0,
+                    knock_x: 0.0 * hit_ratio,
+                    knock_y: 0.0 * hit_ratio,
+                    damage: 0.0,
+                    hit_time: 1000.0,
+                    duration: 500.0,
                     action: action,
                     class: class,
                 },

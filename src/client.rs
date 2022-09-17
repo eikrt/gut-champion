@@ -38,7 +38,7 @@ const RESOLUTION_Y: u32 = 144;
 const SCREEN_WIDTH: u32 = 256 * SCALE as u32;
 const SCREEN_HEIGHT: u32 = 144 * SCALE as u32;
 const SHOW_HITBOXES: bool = false;
-const ENABLE_BOTS: bool = false;
+const ENABLE_BOTS: bool = true;
 const SHOW_BACKGROUND: bool = true;
 const STATUS_FONT_SIZE: u16 = 200;
 const STATUS_PERCENTAGE_COLOR: Color = Color::RGBA(255, 255, 195, 255);
@@ -204,6 +204,12 @@ fn main_loop() -> Result<(), String> {
                 .unwrap(),
         ),
         (
+            Sprite::AlchemistGrab,
+            texture_creator
+                .load_texture("res/alchemist/alchemist_grab.png")
+                .unwrap(),
+        ),
+        (
             Sprite::AlchemistSideSmash,
             texture_creator
                 .load_texture("res/alchemist/alchemist_side_smash.png")
@@ -267,6 +273,12 @@ fn main_loop() -> Result<(), String> {
             Sprite::CommodoreDodge,
             texture_creator
                 .load_texture("res/commodore/commodore_dodge.png")
+                .unwrap(),
+        ),
+        (
+            Sprite::CommodoreGrab,
+            texture_creator
+                .load_texture("res/commodore/commodore_grab.png")
                 .unwrap(),
         ),
         (
@@ -584,6 +596,10 @@ fn main_loop() -> Result<(), String> {
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = false;
                     }
+
+                    if !player_entity.left {
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().grab_counter += 1;
+                    }
                     entities.lock().unwrap().get_mut(&player_id).unwrap().left = true;
                 }
                 Event::KeyDown {
@@ -627,6 +643,13 @@ fn main_loop() -> Result<(), String> {
                             .unwrap()
                             .start_shield();
                     }
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::U),
+                    ..
+                } => {
+
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().grab = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
@@ -728,10 +751,19 @@ fn main_loop() -> Result<(), String> {
                         }
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
                     }
+                    if !player_entity.right {
+                        entities.lock().unwrap().get_mut(&player_id).unwrap().grab_counter += 1;
+                    }
                     entities.lock().unwrap().get_mut(&player_id).unwrap().right = true;
                 }
 
-                // WASD
+                Event::KeyUp {
+                    keycode: Some(Keycode::U),
+                    ..
+                } => {
+
+                    entities.lock().unwrap().get_mut(&player_id).unwrap().grab = false;
+                }
                 Event::KeyUp {
                     keycode: Some(Keycode::I),
                     ..
@@ -759,6 +791,7 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
+
                     entities.lock().unwrap().get_mut(&player_id).unwrap().left = false;
                     entities
                         .lock()
