@@ -683,7 +683,7 @@ impl Entity {
 
         self.freeze = true;
         let hitbox_action = Action::action(hitbox.class.clone(), hitbox.action.clone(), 1);
-        let hit_multiplier = 1.0 + self.hp as f32 / 90.0;
+        let hit_multiplier = 1.0 + self.hp as f32 / 180.0;
         let hit_multiplier_knock = 3.0 + self.hp as f32 / 10.0;
         if hitbox.dir {
             self.dx += 5.0 + hitbox_action.knock_x * hit_multiplier_knock;
@@ -821,7 +821,7 @@ impl Action {
                     knock_x: 0.0 * hit_ratio,
                     knock_y: 0.0 * hit_ratio,
                     damage: 0.0,
-                    hit_time: 1000.0,
+                    hit_time: 1500.0,
                     duration: 500.0,
                     action: action,
                     class: class,
@@ -885,7 +885,7 @@ impl Action {
                     y: 4.0,
                     knock_x: 25.0 * hit_ratio,
                     knock_y: 15.0 * hit_ratio,
-                    damage: 25.0 * hit_ratio,
+                    damage: 20.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 750.0,
                     action: action,
@@ -967,7 +967,7 @@ impl Action {
                     knock_x: 0.0 * hit_ratio,
                     knock_y: 0.0 * hit_ratio,
                     damage: 0.0,
-                    hit_time: 1000.0,
+                    hit_time: 1500.0,
                     duration: 500.0,
                     action: action,
                     class: class,
@@ -1045,7 +1045,7 @@ impl Action {
                     y: 4.0,
                     knock_x: 25.0 * hit_ratio,
                     knock_y: 15.0 * hit_ratio,
-                    damage: 45.0 * hit_ratio,
+                    damage: 25.0 * hit_ratio,
                     hit_time: 1000.0,
                     duration: 750.0,
                     action: action,
