@@ -49,6 +49,7 @@ const CONF_PATH: &str = "./conf/conf";
 #[derive(PartialEq)]
 enum MenuState {
     Network,
+    Level,
     Character,
     Game,
 }
@@ -409,6 +410,36 @@ fn main_loop() -> Result<(), String> {
             index: 2,
         },
     ];
+    let mut level_buttons = vec![
+        Button {
+            x: 8,
+            y: 8,
+            w: long_button_sprite.query().width as i32,
+            h: long_button_sprite.query().height as i32,
+            main_sprite: Sprite::LongButtonMain,
+            hovered_sprite: Sprite::LongButtonHovered,
+            pressed_sprite: Sprite::LongButtonPressed,
+            action: ButtonAction::Connect,
+            hovered: false,
+            pressed: false,
+            text: "Arena".to_string(),
+            index: 0,
+        },
+        Button {
+            x: 8,
+            y: 44,
+            w: long_button_sprite.query().width as i32,
+            h: long_button_sprite.query().height as i32,
+            main_sprite: Sprite::LongButtonMain,
+            hovered_sprite: Sprite::LongButtonHovered,
+            pressed_sprite: Sprite::LongButtonPressed,
+            action: ButtonAction::Connect,
+            hovered: false,
+            pressed: false,
+            text: "Campaign".to_string(),
+            index: 1,
+        },
+    ];
     let mut tilt_change = 0;
     let mut tilt_time = 186;
     let mut entities: Arc<Mutex<HashMap<u64, Entity>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -435,52 +466,7 @@ fn main_loop() -> Result<(), String> {
     let mut entities_send = entities.clone();
 
     let mut entities_thread = entities.clone();
-    let mut environment: HashMap<u64, Obstacle> = HashMap::from([
-        (
-            rng.gen(),
-            Obstacle {
-                x: 24.0,
-                y: 70.0,
-                h: 0.0,
-                w: 0.0,
-                current_sprite: Sprite::Ground,
-                obstacle_type: ObstacleType::Stage,
-            },
-        ),
-        (
-            rng.gen(),
-            Obstacle {
-                x: 50.0,
-                y: 40.0,
-                h: 0.0,
-                w: 0.0,
-                current_sprite: Sprite::Platform,
-                obstacle_type: ObstacleType::Platform,
-            },
-        ),
-        (
-            rng.gen(),
-            Obstacle {
-                x: 108.0,
-                y: 10.0,
-                h: 0.0,
-                w: 0.0,
-                current_sprite: Sprite::Platform,
-                obstacle_type: ObstacleType::Platform,
-            },
-        ),
-        (
-            rng.gen(),
-            Obstacle {
-                x: 170.0,
-                y: 40.0,
-                h: 0.0,
-                w: 0.0,
-                current_sprite: Sprite::Platform,
-                obstacle_type: ObstacleType::Platform,
-            },
-        ),
-    ]);
+    let mut environment: HashMap<u64, Obstacle> = get_environment();
     let mut entities_client: HashMap<u64, Entity> = HashMap::new();
     let mut space = false;
     let mut do_not_move = false;
@@ -598,7 +584,12 @@ fn main_loop() -> Result<(), String> {
                     }
 
                     if !player_entity.left {
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().grab_counter += 1;
+                        entities
+                            .lock()
+                            .unwrap()
+                            .get_mut(&player_id)
+                            .unwrap()
+                            .grab_counter += 1;
                     }
                     entities.lock().unwrap().get_mut(&player_id).unwrap().left = true;
                 }
@@ -648,7 +639,6 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::U),
                     ..
                 } => {
-
                     entities.lock().unwrap().get_mut(&player_id).unwrap().grab = true;
                 }
                 Event::KeyDown {
@@ -656,74 +646,85 @@ fn main_loop() -> Result<(), String> {
                     ..
                 } => {
                     if !space {
-                        if menu_state == MenuState::Character {
-                            if select_index == 0 {
-                                player_class = ClassType::Alchemist;
-                            } else if select_index == 1 {
-                                player_class = ClassType::Commodore;
-                            }
-                            entities.lock().unwrap().clear();
-                            entities.lock().unwrap().insert(
-                                player_id,
-                                Entity::new(
-                                    48.0,
-                                    0.0,
-                                    player_class.clone(),
-                                    "Player".to_string(),
-                                    false,
-                                    7.0,
-                                    8.0,
-                                    8.0,
-                                    12.0,
-                                ),
-                            );
-
-                            if ENABLE_BOTS {
+                        match menu_state {
+                            MenuState::Character => {
+                                if select_index == 0 {
+                                    player_class = ClassType::Alchemist;
+                                } else if select_index == 1 {
+                                    player_class = ClassType::Commodore;
+                                }
+                                entities.lock().unwrap().clear();
                                 entities.lock().unwrap().insert(
-                                    rng.gen(),
+                                    player_id,
                                     Entity::new(
-                                        98.0,
+                                        48.0,
                                         0.0,
                                         player_class.clone(),
-                                        "Bot".to_string(),
-                                        true,
-                                        4.0,
-                                        0.0,
+                                        "Player".to_string(),
+                                        false,
+                                        7.0,
+                                        8.0,
                                         8.0,
                                         12.0,
                                     ),
                                 );
-                            }
-                            client_threads(
-                                ip.to_string(),
-                                time_from_last_packet.clone(),
-                                entities_send.clone(),
-                                network_entities_thread.clone(),
-                            );
-                            menu_state = MenuState::Game;
-                        }
-                        if menu_state == MenuState::Network {
-                            if select_index == 0 {
-                                if network_buttons[0].action == ButtonAction::Connect {
-                                    ip = "localhost:8888";
-                                }
-                            } else if select_index == 1 {
-                                if network_buttons[1].action == ButtonAction::Connect {
-                                    ip = &custom_server_ip.trim();
-                                }
-                            } else if select_index == 2 {
-                                if network_buttons[2].action == ButtonAction::Connect {
-                                    ip = "165.22.86.59:8888";
-                                }
-                            }
 
-                            menu_state = MenuState::Character;
+                                if ENABLE_BOTS {
+                                    entities.lock().unwrap().insert(
+                                        rng.gen(),
+                                        Entity::new(
+                                            98.0,
+                                            0.0,
+                                            player_class.clone(),
+                                            "Bot".to_string(),
+                                            true,
+                                            4.0,
+                                            0.0,
+                                            8.0,
+                                            12.0,
+                                        ),
+                                    );
+                                }
+                                client_threads(
+                                    ip.to_string(),
+                                    time_from_last_packet.clone(),
+                                    entities_send.clone(),
+                                    network_entities_thread.clone(),
+                                );
+                                menu_state = MenuState::Game;
+                            }
+                            MenuState::Network => {
+                                if select_index == 0 {
+                                    if network_buttons[0].action == ButtonAction::Connect {
+                                        ip = "localhost:8888";
+                                    }
+                                } else if select_index == 1 {
+                                    if network_buttons[1].action == ButtonAction::Connect {
+                                        ip = &custom_server_ip.trim();
+                                    }
+                                } else if select_index == 2 {
+                                    if network_buttons[2].action == ButtonAction::Connect {
+                                        ip = "165.22.86.59:8888";
+                                    }
+                                }
+
+                                menu_state = MenuState::Level;
+                            }
+                            MenuState::Level => {
+                                if select_index == 0 {
+                                } else if select_index == 1 {
+                                } else if select_index == 2 {
+                                }
+
+                                menu_state = MenuState::Character;
+                            }
+                            MenuState::Game => {}
                         }
                         select_index = 0;
-                    }
 
-                    if !space && !player_entity.smashing && !player_entity.do_not_move {
-                        jump = true;
+                        if !space && !player_entity.smashing && !player_entity.do_not_move {
+                            jump = true;
+                        }
                     }
                 }
                 Event::KeyDown {
@@ -752,7 +753,12 @@ fn main_loop() -> Result<(), String> {
                         entities.lock().unwrap().get_mut(&player_id).unwrap().dir = true;
                     }
                     if !player_entity.right {
-                        entities.lock().unwrap().get_mut(&player_id).unwrap().grab_counter += 1;
+                        entities
+                            .lock()
+                            .unwrap()
+                            .get_mut(&player_id)
+                            .unwrap()
+                            .grab_counter += 1;
                     }
                     entities.lock().unwrap().get_mut(&player_id).unwrap().right = true;
                 }
@@ -761,7 +767,6 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::U),
                     ..
                 } => {
-
                     entities.lock().unwrap().get_mut(&player_id).unwrap().grab = false;
                 }
                 Event::KeyUp {
@@ -791,7 +796,6 @@ fn main_loop() -> Result<(), String> {
                     keycode: Some(Keycode::A),
                     ..
                 } => {
-
                     entities.lock().unwrap().get_mut(&player_id).unwrap().left = false;
                     entities
                         .lock()
@@ -869,6 +873,51 @@ fn main_loop() -> Result<(), String> {
                     select_index = 0;
                 }
                 for b in network_buttons.iter_mut() {
+                    if b.index == select_index {
+                        b.hovered = true;
+                    }
+                    let texture = &sprites.get(&b.main_sprite).unwrap();
+                    b.w = texture.query().width as i32;
+                    b.h = texture.query().height as i32;
+
+                    let text_color = match b.hovered {
+                        true => match b.pressed {
+                            true => PRESSED_COLOR,
+                            false => HOVERED_COLOR,
+                        },
+                        false => NEUTRAL_COLOR,
+                    };
+                    let text = get_text(
+                        b.text.clone(),
+                        text_color,
+                        STATUS_FONT_SIZE,
+                        &status_font,
+                        &texture_creator,
+                    )
+                    .unwrap();
+                    let position = (
+                        ((0.0 + b.x as f32) * SCALE) as i32,
+                        ((0.0 + b.y as f32) * SCALE) as i32,
+                    );
+                    render_text(
+                        &mut canvas,
+                        &text.text_texture,
+                        position,
+                        text.text_sprite,
+                        SCALE,
+                        SCALE,
+                    );
+                }
+            }
+            MenuState::Level => {
+                select_top = level_buttons.len() as i32;
+                for b in level_buttons.iter_mut() {
+                    b.hovered = false;
+                }
+                if select_index < 0 {
+                    select_index = 0;
+                }
+                for b in level_buttons.iter_mut() {
                     if b.index == select_index {
                         b.hovered = true;
                     }
