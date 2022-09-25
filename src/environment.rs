@@ -2,7 +2,8 @@ use crate::graphics::*;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tiled::{FiniteTileLayer, Loader, Map};
+use std::fs;
+const TILE_SIZE: usize = 8;
 #[derive(PartialEq, Serialize, Deserialize, Clone, Debug)]
 pub enum ObstacleType {
     Platform,
@@ -17,41 +18,41 @@ pub struct Obstacle {
     pub current_sprite: Sprite,
     pub obstacle_type: ObstacleType,
 }
-pub fn generate_map(layer: &FiniteTileLayer) {
-    let (width, height) = (layer.width() as usize, layer.height() as usize);
-    for x in 0..width as i32 {
-        for y in 0..height as i32 {
-            if let Some(tile) = layer.get_tile(x, y) {
-                if tile.image != None {
-                    println!("{:?}", tile);
-                }
+pub fn get_environment() -> HashMap<u64, Obstacle> {
+    let mut rng = rand::thread_rng();
+    let mut map: HashMap<u64, Obstacle> = HashMap::new();
+    let contents = fs::read_to_string("maps/arena").expect("Couldn't read file...");
+
+    for (i, row) in contents.split("\n").enumerate() {
+        for (j, element) in row.chars().enumerate() {
+            let mut sprite = Sprite::Ground;
+            let mut obstacle_type = ObstacleType::Stage;
+            if element == '1' {
+                sprite = Sprite::Platform;
+                obstacle_type = ObstacleType::Platform;
             }
+            else if element == '2' {
+                sprite = Sprite::Ground;
+                obstacle_type = ObstacleType::Stage;
+            }
+            else {
+                continue;
+            }
+            map.insert(
+                rng.gen(),
+                Obstacle {
+                    x: (j * TILE_SIZE) as f32,
+                    y: (i * TILE_SIZE) as f32,
+                    w: 0.0,
+                    h: 0.0,
+                    current_sprite: sprite,
+                    obstacle_type: obstacle_type,
+                },
+            );
         }
     }
-}
-pub fn get_environment() -> HashMap<u64, Obstacle> {
-    let mut loader = Loader::new();
-    let map = loader.load_tmx_map("./maps/arena.tmx").unwrap();
-    let mut tile_map: HashMap<u64, Obstacle> = HashMap::new();
-    for layer in map.layers() {
-        generate_map(match &layer.layer_type() {
-            tiled::LayerType::TileLayer(l) => match l {
-                tiled::TileLayer::Finite(f) => f,
-                tiled::TileLayer::Infinite(_) => panic!("Infinite maps not supported"),
-            },
-            tiled::LayerType::ObjectLayer(l) => match l {
-                _ => todo!(),
-            },
-            tiled::LayerType::ImageLayer(l) => match l {
-                _ => todo!(),
-            },
-            tiled::LayerType::GroupLayer(l) => match l {
-                _ => todo!(),
-            },
-        });
-    }
-    let mut rng = rand::thread_rng();
-    HashMap::from([
+    map
+    /*HashMap::from([
         (
             rng.gen(),
             Obstacle {
@@ -96,5 +97,5 @@ pub fn get_environment() -> HashMap<u64, Obstacle> {
                 obstacle_type: ObstacleType::Platform,
             },
         ),
-    ])
+    ]);*/
 }
